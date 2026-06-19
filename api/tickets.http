@@ -1,0 +1,117 @@
+### Tickets — User flows
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+@userEmail = user@tvk.com
+@userPassword = password123
+@ticketId = REPLACE_WITH_TICKET_ID
+
+###############################################
+# Auth — run first to set token
+###############################################
+
+### Login as user
+# @name loginUser
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@userAccessToken = {{loginUser.response.body.data.accessToken}}
+
+###############################################
+# Create tickets
+###############################################
+
+### Create ticket (JSON — no attachments)
+# @name createTicket
+POST {{apiUrl}}/tickets
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "Cannot login to mobile app",
+  "description": "Getting invalid credentials error since yesterday morning.",
+  "category": "Technical",
+  "priority": "HIGH"
+}
+
+###
+
+@ticketId = {{createTicket.response.body.data._id}}
+@ticketNumber = {{createTicket.response.body.data.ticketNumber}}
+
+### Create ticket (multipart — with attachment)
+POST {{apiUrl}}/tickets
+Authorization: Bearer {{userAccessToken}}
+Content-Type: multipart/form-data; boundary=----RestClientBoundary
+
+------RestClientBoundary
+Content-Disposition: form-data; name="title"
+
+Payment failed on subscription
+------RestClientBoundary
+Content-Disposition: form-data; name="description"
+
+Payment was deducted but subscription not activated.
+------RestClientBoundary
+Content-Disposition: form-data; name="category"
+
+Billing
+------RestClientBoundary
+Content-Disposition: form-data; name="priority"
+
+MEDIUM
+------RestClientBoundary
+Content-Disposition: form-data; name="attachments"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./fixtures/sample.pdf
+------RestClientBoundary--
+
+###############################################
+# Read tickets (user)
+###############################################
+
+### Get my tickets
+GET {{apiUrl}}/tickets/my
+Authorization: Bearer {{userAccessToken}}
+
+### Get my tickets — paginated
+GET {{apiUrl}}/tickets/my?page=1&limit=5
+Authorization: Bearer {{userAccessToken}}
+
+### Get my tickets — filter by status
+GET {{apiUrl}}/tickets/my?status=OPEN
+Authorization: Bearer {{userAccessToken}}
+
+### Get my tickets — overdue only
+GET {{apiUrl}}/tickets/my?overdue=true
+Authorization: Bearer {{userAccessToken}}
+
+### Get ticket by ID
+GET {{apiUrl}}/tickets/{{ticketId}}
+Authorization: Bearer {{userAccessToken}}
+
+###############################################
+# Comments (user)
+###############################################
+
+### Add comment to ticket
+# @name addUserComment
+POST {{apiUrl}}/tickets/{{ticketId}}/comments
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{
+  "message": "Still facing the same issue. Please help."
+}
+
+### Get ticket comments
+GET {{apiUrl}}/tickets/{{ticketId}}/comments
+Authorization: Bearer {{userAccessToken}}

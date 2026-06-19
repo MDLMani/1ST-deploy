@@ -1,0 +1,74 @@
+### Notifications
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+@userEmail = squallhari+0@gmail.com
+@userPassword = password123
+@adminEmail = squallhari+1@gmail.com
+@adminPassword = password123
+@notificationId = REPLACE_WITH_NOTIFICATION_ID
+
+###############################################
+# Auth — run logins first
+###############################################
+
+### Login as user
+# @name loginUser
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@userAccessToken = {{loginUser.response.body.data.accessToken}}
+
+### Login as admin
+# @name loginAdmin
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###
+
+@adminAccessToken = {{loginAdmin.response.body.data.accessToken}}
+
+###############################################
+# User notifications
+###############################################
+
+### Get user notifications
+GET {{apiUrl}}/notifications
+Authorization: Bearer {{userAccessToken}}
+
+### Get user notifications — paginated
+GET {{apiUrl}}/notifications?page=1&limit=20
+Authorization: Bearer {{userAccessToken}}
+
+###############################################
+# Admin notifications (overdue alerts)
+###############################################
+
+### Get admin notifications
+# @name getAdminNotifications
+GET {{apiUrl}}/notifications
+Authorization: Bearer {{adminAccessToken}}
+
+###
+
+@notificationId = {{getAdminNotifications.response.body.data[0]._id}}
+
+### Mark single notification as read
+PATCH {{apiUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{adminAccessToken}}
+
+### Mark all notifications as read
+PATCH {{apiUrl}}/notifications/read-all
+Authorization: Bearer {{adminAccessToken}}

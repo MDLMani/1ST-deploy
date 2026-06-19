@@ -1,0 +1,141 @@
+### Tickets — Staff flows (admin / support agent)
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+@adminEmail = admin@tvk.com
+@adminPassword = password123
+@agentEmail = agent@tvk.com
+@agentPassword = password123
+@userEmail = user@tvk.com
+@userPassword = password123
+@ticketId = REPLACE_WITH_TICKET_ID
+
+###############################################
+# Auth — run logins first
+###############################################
+
+### Login as admin
+# @name loginAdmin
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###
+
+@adminAccessToken = {{loginAdmin.response.body.data.accessToken}}
+@adminId = {{loginAdmin.response.body.data.user.id}}
+
+### Login as support agent
+# @name loginAgent
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{agentEmail}}",
+  "password": "{{agentPassword}}"
+}
+
+###
+
+@agentAccessToken = {{loginAgent.response.body.data.accessToken}}
+@agentId = {{loginAgent.response.body.data.user.id}}
+
+### Login as user (for 403 test)
+# @name loginUser
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@userAccessToken = {{loginUser.response.body.data.accessToken}}
+
+###############################################
+# List all tickets (staff only)
+###############################################
+
+### Get all tickets (admin)
+# @name getAllTickets
+GET {{apiUrl}}/tickets/all
+Authorization: Bearer {{adminAccessToken}}
+
+###
+
+@ticketId = {{getAllTickets.response.body.data[0]._id}}
+
+### Get all tickets — paginated & filtered
+GET {{apiUrl}}/tickets/all?page=1&limit=10&status=OPEN&overdue=false
+Authorization: Bearer {{adminAccessToken}}
+
+### Get all tickets (support agent)
+GET {{apiUrl}}/tickets/all
+Authorization: Bearer {{agentAccessToken}}
+
+###############################################
+# Status & assignment
+###############################################
+
+### Update ticket status → IN_PROGRESS
+PATCH {{apiUrl}}/tickets/{{ticketId}}/status
+Authorization: Bearer {{adminAccessToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS"
+}
+
+### Assign ticket to support agent
+PATCH {{apiUrl}}/tickets/{{ticketId}}/assign
+Authorization: Bearer {{adminAccessToken}}
+Content-Type: application/json
+
+{
+  "assignedTo": "{{agentId}}"
+}
+
+### Update ticket status → RESOLVED
+PATCH {{apiUrl}}/tickets/{{ticketId}}/status
+Authorization: Bearer {{agentAccessToken}}
+Content-Type: application/json
+
+{
+  "status": "RESOLVED"
+}
+
+### Update ticket status → CLOSED
+PATCH {{apiUrl}}/tickets/{{ticketId}}/status
+Authorization: Bearer {{adminAccessToken}}
+Content-Type: application/json
+
+{
+  "status": "CLOSED"
+}
+
+###############################################
+# Staff replies
+###############################################
+
+### Add staff comment/reply
+POST {{apiUrl}}/tickets/{{ticketId}}/comments
+Authorization: Bearer {{agentAccessToken}}
+Content-Type: application/json
+
+{
+  "message": "We have reset your account. Please try logging in again."
+}
+
+### Get ticket by ID (staff view)
+GET {{apiUrl}}/tickets/{{ticketId}}
+Authorization: Bearer {{adminAccessToken}}
+
+### User cannot access staff endpoint (expect 403)
+GET {{apiUrl}}/tickets/all
+Authorization: Bearer {{userAccessToken}}

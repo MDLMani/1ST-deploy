@@ -1,0 +1,140 @@
+### Auth — Register, Login, Refresh, Profile
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+@userEmail = squallhari+0@gmail.com
+@userPassword = password123
+@adminEmail = squallhari+1@gmail.com
+@adminPassword = password123
+@agentEmail = agent@tvk.com
+@agentPassword = password123
+
+###############################################
+# Setup — run once to create test accounts
+###############################################
+
+### Register mobile user (returns tokens on first sign-up; re-run says account exists — use Login)
+# @name registerUser
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "TVK User",
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@userAccessToken = {{registerUser.response.body.data.accessToken}}
+@userRefreshToken = {{registerUser.response.body.data.refreshToken}}
+@userId = {{registerUser.response.body.data.user.id}}
+
+### Register admin
+# @name registerAdmin
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "TVK Admin",
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}",
+  "role": "admin"
+}
+
+### Register support agent
+# @name registerAgent
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "TVK Agent",
+  "email": "{{agentEmail}}",
+  "password": "{{agentPassword}}",
+  "role": "support_agent"
+}
+
+###############################################
+# Login — tokens captured for other requests
+###############################################
+
+### Login as user
+# @name loginUser
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@userAccessToken = {{loginUser.response.body.data.accessToken}}
+@userRefreshToken = {{loginUser.response.body.data.refreshToken}}
+@userId = {{loginUser.response.body.data.user.id}}
+
+### Login as admin
+# @name loginAdmin
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###
+
+@adminAccessToken = {{loginAdmin.response.body.data.accessToken}}
+@adminRefreshToken = {{loginAdmin.response.body.data.refreshToken}}
+@adminId = {{loginAdmin.response.body.data.user.id}}
+
+### Login as support agent
+# @name loginAgent
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{agentEmail}}",
+  "password": "{{agentPassword}}"
+}
+
+###
+
+@agentAccessToken = {{loginAgent.response.body.data.accessToken}}
+@agentId = {{loginAgent.response.body.data.user.id}}
+
+###############################################
+# Token & profile
+###############################################
+
+### Refresh access token
+# @name refreshToken
+POST {{apiUrl}}/auth/refresh-token
+Content-Type: application/json
+
+{
+  "refreshToken": "{{userRefreshToken}}"
+}
+
+###
+
+@newAccessToken = {{refreshToken.response.body.data.accessToken}}
+
+### Get profile (user)
+GET {{apiUrl}}/auth/profile
+Authorization: Bearer {{userAccessToken}}
+
+### Get profile (admin)
+GET {{apiUrl}}/auth/profile
+Authorization: Bearer {{adminAccessToken}}
+
+### Invalid login (expect 401)
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "wrong-password"
+}

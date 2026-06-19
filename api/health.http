@@ -1,0 +1,12 @@
+### TVK Support API — Health & Docs
+### Use REST Client (VS Code/Cursor) or similar .http runner
+
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+### Health check
+GET {{baseUrl}}/health
+
+### Swagger UI (open in browser)
+# @name swaggerDocs
+GET {{baseUrl}}/api-docs/

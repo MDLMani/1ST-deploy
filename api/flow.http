@@ -1,0 +1,178 @@
+### Full API test flow (run top to bottom)
+@baseUrl = http://localhost:5001
+@apiUrl = {{baseUrl}}/api/v1
+
+@userEmail = squallhari+0@gmail.com
+@userPassword = password123
+@adminEmail = admin@tvk.com
+@adminPassword = password123
+@agentEmail = agent@tvk.com
+@agentPassword = password123
+
+### 1. Health
+GET {{baseUrl}}/health
+
+### 2. Register user (first run creates account; re-run says account exists — then use step 5 Login)
+# @name flowRegisterUser
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Flow Test User",
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+### 3. Register admin (skip if already exists)
+# @name flowRegisterAdmin
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Flow Test Admin",
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}",
+  "role": "admin"
+}
+
+### 4. Register agent (skip if already exists)
+# @name flowRegisterAgent
+POST {{apiUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Flow Test Agent",
+  "email": "{{agentEmail}}",
+  "password": "{{agentPassword}}",
+  "role": "support_agent"
+}
+
+### 5. Login user (same email/password as step 2)
+# @name flowLoginUser
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+###
+
+@flowUserToken = {{flowLoginUser.response.body.data.accessToken}}
+
+### 6. Login admin
+# @name flowLoginAdmin
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###
+
+@flowAdminToken = {{flowLoginAdmin.response.body.data.accessToken}}
+
+### 7. Login agent
+# @name flowLoginAgent
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{agentEmail}}",
+  "password": "{{agentPassword}}"
+}
+
+###
+
+@flowAgentToken = {{flowLoginAgent.response.body.data.accessToken}}
+@flowAgentId = {{flowLoginAgent.response.body.data.user.id}}
+
+### 8. Create ticket
+# @name flowCreateTicket
+POST {{apiUrl}}/tickets
+Authorization: Bearer {{flowUserToken}}
+Content-Type: application/json
+
+{
+  "title": "End-to-end test ticket",
+  "description": "Created during full API flow test run.",
+  "category": "General",
+  "priority": "MEDIUM"
+}
+
+###
+
+@flowTicketId = {{flowCreateTicket.response.body.data._id}}
+
+### 9. User adds comment
+POST {{apiUrl}}/tickets/{{flowTicketId}}/comments
+Authorization: Bearer {{flowUserToken}}
+Content-Type: application/json
+
+{
+  "message": "This is a test comment from the user."
+}
+
+### 10. Admin lists all tickets
+GET {{apiUrl}}/tickets/all
+Authorization: Bearer {{flowAdminToken}}
+
+### 11. Admin assigns to agent
+PATCH {{apiUrl}}/tickets/{{flowTicketId}}/assign
+Authorization: Bearer {{flowAdminToken}}
+Content-Type: application/json
+
+{
+  "assignedTo": "{{flowAgentId}}"
+}
+
+### 12. Agent replies
+POST {{apiUrl}}/tickets/{{flowTicketId}}/comments
+Authorization: Bearer {{flowAgentToken}}
+Content-Type: application/json
+
+{
+  "message": "Agent reply during flow test."
+}
+
+### 13. Agent marks IN_PROGRESS
+PATCH {{apiUrl}}/tickets/{{flowTicketId}}/status
+Authorization: Bearer {{flowAgentToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS"
+}
+
+### 14. Agent resolves ticket
+PATCH {{apiUrl}}/tickets/{{flowTicketId}}/status
+Authorization: Bearer {{flowAgentToken}}
+Content-Type: application/json
+
+{
+  "status": "RESOLVED"
+}
+
+### 15. User views their tickets
+GET {{apiUrl}}/tickets/my
+Authorization: Bearer {{flowUserToken}}
+
+### 16. Refresh token
+# @name flowRefresh
+POST {{apiUrl}}/auth/refresh-token
+Content-Type: application/json
+
+{
+  "refreshToken": "{{flowLoginUser.response.body.data.refreshToken}}"
+}
+
+### 17. Get profile
+GET {{apiUrl}}/auth/profile
+Authorization: Bearer {{flowUserToken}}
+
+### 18. Admin notifications
+GET {{apiUrl}}/notifications
+Authorization: Bearer {{flowAdminToken}}
