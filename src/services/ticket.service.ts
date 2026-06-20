@@ -1,12 +1,12 @@
 import { ticketRepository, TicketQueryOptions } from '../repositories/ticket.repository';
 import { userRepository } from '../repositories/user.repository';
 import { ApiError } from '../utils/ApiError';
-import { TicketPriority, TicketStatus, UserRole } from '../constants';
+import { TicketPriority, TicketStatus, UserRole, SOCKET_EVENTS } from '../constants';
 import { IAttachment } from '../interfaces';
 import { CreateTicketInput, UpdateStatusInput, AssignTicketInput } from '../validators';
 import { getSocketIO } from '../sockets';
-import { SOCKET_EVENTS } from '../constants';
 import { getTicketOwnerId } from '../utils/ticket.helpers';
+import { notificationService } from './notification.service';
 import { Types } from 'mongoose';
 
 export class TicketService {
@@ -39,6 +39,17 @@ export class TicketService {
       io.emit(SOCKET_EVENTS.TICKET_CREATED, populated);
     }
 
+    const ownerId = userId;
+    await notificationService.notifyUser(
+      ownerId,
+      'TICKET_CREATED',
+      {
+        ticketNumber: ticket.ticketNumber,
+        title: ticket.title,
+      },
+      ticket._id.toString()
+    );
+
     return populated;
   }
 
@@ -48,6 +59,15 @@ export class TicketService {
 
   async getAllTickets(options: TicketQueryOptions) {
     return ticketRepository.findAll(options);
+  }
+
+  async getDashboardStats() {
+    const stats = await ticketRepository.getDashboardStats();
+    const staff = await userRepository.findAgentsAndAdmins();
+    return {
+      ...stats,
+      activeAgents: staff.length,
+    };
   }
 
   async getTicketById(ticketId: string, requesterId: string, requesterRole: UserRole) {
@@ -96,6 +116,23 @@ export class TicketService {
       io.emit(SOCKET_EVENTS.TICKET_UPDATED, updated);
     }
 
+    const ownerId = getTicketOwnerId(updated);
+    const templateId =
+      input.status === TicketStatus.RESOLVED || input.status === TicketStatus.CLOSED
+        ? 'TICKET_RESOLVED'
+        : 'TICKET_UPDATED';
+
+    await notificationService.notifyUser(
+      ownerId,
+      templateId,
+      {
+        ticketNumber: updated.ticketNumber,
+        title: updated.title,
+        status: input.status,
+      },
+      updated._id.toString()
+    );
+
     return updated;
   }
 
@@ -135,6 +172,17 @@ export class TicketService {
     if (io) {
       io.emit(SOCKET_EVENTS.TICKET_ASSIGNED, updated);
     }
+
+    const ownerId = getTicketOwnerId(updated);
+    await notificationService.notifyUser(
+      ownerId,
+      'TICKET_ASSIGNED',
+      {
+        ticketNumber: updated.ticketNumber,
+        title: updated.title,
+      },
+      updated._id.toString()
+    );
 
     return updated;
   }

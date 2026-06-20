@@ -15,6 +15,12 @@ export class UserRepository {
     return query.exec();
   }
 
+  async findByEmailWithResetOtp(email: string): Promise<IUser | null> {
+    return User.findOne({ email: email.toLowerCase() })
+      .select('+password +resetOtpHash +resetOtpExpires +resetOtpAttempts')
+      .exec();
+  }
+
   async findById(id: string): Promise<IUser | null> {
     return User.findById(id).exec();
   }
@@ -31,6 +37,20 @@ export class UserRepository {
 
   async updateById(id: string, data: UpdateQuery<IUser>): Promise<IUser | null> {
     return User.findByIdAndUpdate(id, data, { new: true }).exec();
+  }
+
+  async setPasswordResetOtp(
+    id: string,
+    resetOtpHash: string,
+    resetOtpExpires: Date
+  ): Promise<void> {
+    await User.findByIdAndUpdate(id, {
+      $set: {
+        resetOtpHash,
+        resetOtpExpires,
+        resetOtpAttempts: 0,
+      },
+    }).exec();
   }
 
   async findAll(filter: FilterQuery<IUser> = {}): Promise<IUser[]> {

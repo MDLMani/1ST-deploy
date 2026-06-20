@@ -71,6 +71,11 @@ export const getAllTickets = asyncHandler(async (req, res: Response) => {
   });
 });
 
+export const getTicketStats = asyncHandler(async (_req, res: Response) => {
+  const stats = await ticketService.getDashboardStats();
+  sendSuccess(res, 'Dashboard stats retrieved', stats);
+});
+
 export const getTicketById = asyncHandler(async (req, res: Response) => {
   const ticket = await ticketService.getTicketById(
     getRouteParam(req.params.id),

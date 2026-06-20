@@ -8,6 +8,8 @@
 @adminPassword = password123
 @agentEmail = agent@tvk.com
 @agentPassword = password123
+@resetOtp = 123456
+@newPassword = newpassword123
 
 ###############################################
 # Setup — run once to create test accounts
@@ -137,4 +139,101 @@ Content-Type: application/json
 {
   "email": "{{userEmail}}",
   "password": "wrong-password"
+}
+
+###############################################
+# Forgot password (OTP via SMTP email)
+#
+# IMPORTANT:
+# - Account must exist (register/login first). With MONGODB_URI=memory, users are lost on server restart.
+# - In development, OTP is also printed in the backend terminal: [DEV] Password reset OTP for ...
+# - Check spam/promotions if email is not in inbox.
+# - Ensure .env has real SMTP_* values (not .env.example placeholders).
+#
+# Flow:
+# 1. Register or login the account first
+# 2. Run "Request password reset OTP"
+# 3. Set @resetOtp from email (or backend terminal in dev)
+# 4. Run "Verify OTP"
+# 5. Run "Reset password with OTP"
+# 6. Run "Login with new password"
+###############################################
+
+### Request password reset OTP (user)
+# @name forgotPasswordUser
+POST {{apiUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}"
+}
+
+### Request password reset OTP (admin)
+# @name forgotPasswordAdmin
+POST {{apiUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}"
+}
+
+### Verify OTP (user)
+# @name verifyOtpUser
+POST {{apiUrl}}/auth/verify-otp
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "otp": "{{resetOtp}}"
+}
+
+### Reset password with OTP (user)
+# Replace @resetOtp with the 6-digit code from your email
+# @name resetPasswordUser
+POST {{apiUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "otp": "{{resetOtp}}",
+  "password": "{{newPassword}}"
+}
+
+### Reset password with OTP (admin)
+# @name resetPasswordAdmin
+POST {{apiUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "otp": "{{resetOtp}}",
+  "password": "{{newPassword}}"
+}
+
+### Login with new password (after reset)
+# @name loginAfterReset
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{newPassword}}"
+}
+
+### Invalid OTP (expect 400)
+POST {{apiUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "otp": "000000",
+  "password": "{{newPassword}}"
+}
+
+### Forgot password — unknown email (still returns 200, no email sent)
+POST {{apiUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "notregistered@example.com"
 }

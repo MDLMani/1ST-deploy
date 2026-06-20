@@ -3,11 +3,16 @@ import app from './app';
 import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initSocketIO } from './sockets';
+import { initWebPush } from './services/push.service';
+import { verifySmtpConnection } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+
+  initWebPush();
+  await verifySmtpConnection();
 
   const httpServer = http.createServer(app);
   initSocketIO(httpServer);

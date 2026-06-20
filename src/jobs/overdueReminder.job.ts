@@ -11,6 +11,7 @@ import {
 import { getSocketIO } from '../sockets';
 import { cronLogger } from '../utils/logger';
 import { ITicket } from '../models/Ticket.model';
+import { getTicketOwnerId } from '../utils/ticket.helpers';
 
 const isTicketOverdue = (ticket: ITicket): boolean => {
   const thresholdHours = OVERDUE_THRESHOLDS_HOURS[ticket.priority as TicketPriority];
@@ -56,6 +57,17 @@ export const startOverdueReminderJob = (): void => {
           'Overdue Ticket Alert',
           `Ticket ${updated.ticketNumber} (${updated.priority}) is overdue and requires attention.`,
           adminIds
+        );
+
+        const ownerId = getTicketOwnerId(updated);
+        await notificationService.notifyUser(
+          ownerId,
+          'TICKET_OVERDUE',
+          {
+            ticketNumber: updated.ticketNumber,
+            title: updated.title,
+          },
+          updated._id.toString()
         );
 
         if (io) {

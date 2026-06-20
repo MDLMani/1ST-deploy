@@ -20,6 +20,30 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z
+    .string()
+    .length(6, 'OTP must be 6 digits')
+    .regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  password: z
+    .string()
+    .min(6, 'Password must be at least 6 characters')
+    .max(128),
+});
+
+export const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z
+    .string()
+    .length(6, 'OTP must be 6 digits')
+    .regex(/^\d{6}$/, 'OTP must be 6 digits'),
+});
+
 export const createTicketSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200),
   description: z.string().min(10, 'Description must be at least 10 characters'),
@@ -52,6 +76,9 @@ export const paginationSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 export type AssignTicketInput = z.infer<typeof assignTicketSchema>;
