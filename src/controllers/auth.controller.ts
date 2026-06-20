@@ -53,11 +53,11 @@ export const getStaff = asyncHandler(async (_req, res: Response) => {
 
 export const forgotPassword = asyncHandler(async (req, res: Response) => {
   const input = req.body as ForgotPasswordInput;
-  await authService.forgotPassword(input);
+  const result = await authService.forgotPassword(input);
   sendSuccess(
     res,
     'If an account exists with that email, a password reset OTP has been sent.',
-    undefined,
+    result,
     200
   );
 });

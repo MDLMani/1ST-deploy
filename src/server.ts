@@ -4,15 +4,18 @@ import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initSocketIO } from './sockets';
 import { initWebPush } from './services/push.service';
-import { verifySmtpConnection } from './services/email.service';
+import { initSmtp } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
-  await connectDatabase();
+  const [, smtpOk] = await Promise.all([connectDatabase(), initSmtp()]);
+
+  if (!smtpOk && env.NODE_ENV === 'development') {
+    logger.warn('SMTP warmup skipped or failed — first OTP email may retry automatically');
+  }
 
   initWebPush();
-  await verifySmtpConnection();
 
   const httpServer = http.createServer(app);
   initSocketIO(httpServer);

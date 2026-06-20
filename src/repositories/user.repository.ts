@@ -17,7 +17,7 @@ export class UserRepository {
 
   async findByEmailWithResetOtp(email: string): Promise<IUser | null> {
     return User.findOne({ email: email.toLowerCase() })
-      .select('+password +resetOtpHash +resetOtpExpires +resetOtpAttempts')
+      .select('+password +resetOtpHash +resetOtpExpires +resetOtpAttempts +resetOtpLastSentAt')
       .exec();
   }
 
@@ -42,13 +42,15 @@ export class UserRepository {
   async setPasswordResetOtp(
     id: string,
     resetOtpHash: string,
-    resetOtpExpires: Date
+    resetOtpExpires: Date,
+    resetOtpLastSentAt: Date
   ): Promise<void> {
     await User.findByIdAndUpdate(id, {
       $set: {
         resetOtpHash,
         resetOtpExpires,
         resetOtpAttempts: 0,
+        resetOtpLastSentAt,
       },
     }).exec();
   }

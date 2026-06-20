@@ -6,12 +6,15 @@ import { ApiError } from '../utils/ApiError';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 import { UserRole } from '../constants';
 import { RegisterInput, LoginInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput } from '../validators';
-import { sendPasswordResetOtp } from './email.service';
+import { sendPasswordResetOtp, ensureSmtpReady } from './email.service';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
 const SALT_ROUNDS = 12;
+const OTP_SALT_ROUNDS = 8;
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_RESEND_COOLDOWN_SEC = 60;
 const MAX_OTP_ATTEMPTS = 5;
 
 type AuthUser = {
@@ -107,23 +110,38 @@ export class AuthService {
     return crypto.randomInt(100000, 999999).toString();
   }
 
-  async forgotPassword(input: ForgotPasswordInput): Promise<void> {
-    const user = await userRepository.findByEmail(input.email);
+  async forgotPassword(input: ForgotPasswordInput): Promise<{ cooldownSeconds: number }> {
+    const user = await userRepository.findByEmailWithResetOtp(input.email);
     if (!user) {
       if (env.NODE_ENV === 'development') {
         logger.warn(`Forgot password: no account found for ${input.email}`);
       }
-      return;
+      return { cooldownSeconds: OTP_RESEND_COOLDOWN_SEC };
+    }
+
+    if (
+      user.resetOtpLastSentAt &&
+      user.resetOtpExpires &&
+      user.resetOtpExpires.getTime() > Date.now()
+    ) {
+      const elapsed = Date.now() - user.resetOtpLastSentAt.getTime();
+      if (elapsed < OTP_RESEND_COOLDOWN_MS) {
+        const retryAfterSeconds = Math.ceil((OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
+        throw new ApiError(
+          429,
+          `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`,
+          true,
+          { retryAfterSeconds }
+        );
+      }
     }
 
     const otp = this.generateOtp();
-    const resetOtpHash = await bcrypt.hash(otp, SALT_ROUNDS);
 
-    await userRepository.setPasswordResetOtp(
-      user._id.toString(),
-      resetOtpHash,
-      new Date(Date.now() + OTP_EXPIRY_MS)
-    );
+    const [resetOtpHash] = await Promise.all([
+      bcrypt.hash(otp, OTP_SALT_ROUNDS),
+      ensureSmtpReady().catch(() => undefined),
+    ]);
 
     if (env.NODE_ENV === 'development') {
       logger.info(`[DEV] Password reset OTP for ${user.email}: ${otp}`);
@@ -133,8 +151,17 @@ export class AuthService {
       await sendPasswordResetOtp(user.email, otp, user.name);
     } catch (error) {
       logger.error('Failed to send password reset email', { email: user.email, error });
-      throw new ApiError(503, 'Failed to send reset email. Please try again later.');
+      throw new ApiError(503, 'Failed to send reset email. Please try again in a moment.');
     }
+
+    await userRepository.setPasswordResetOtp(
+      user._id.toString(),
+      resetOtpHash,
+      new Date(Date.now() + OTP_EXPIRY_MS),
+      new Date()
+    );
+
+    return { cooldownSeconds: OTP_RESEND_COOLDOWN_SEC };
   }
 
   private async validateResetOtp(email: string, otp: string): Promise<IUser> {
@@ -176,6 +203,7 @@ export class AuthService {
       resetOtpHash: undefined,
       resetOtpExpires: undefined,
       resetOtpAttempts: 0,
+      resetOtpLastSentAt: undefined,
     });
   }
 }
