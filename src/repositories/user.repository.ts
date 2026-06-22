@@ -25,6 +25,10 @@ export class UserRepository {
     return User.findById(id).exec();
   }
 
+  async findByIdWithPassword(id: string): Promise<IUser | null> {
+    return User.findById(id).select('+password').exec();
+  }
+
   async findByRole(role: UserRole): Promise<IUser[]> {
     return User.find({ role }).exec();
   }

@@ -4,7 +4,7 @@ import { userRepository } from '../repositories/user.repository';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import { ApiError } from '../utils/ApiError';
-import { RegisterInput, LoginInput, RefreshTokenInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput } from '../validators';
+import { RegisterInput, LoginInput, RefreshTokenInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput, UpdateProfileInput, ChangePasswordInput } from '../validators';
 
 const toPublicUser = (user: { _id: unknown; name: string; email: string; role: string }) => ({
   id: String(user._id),
@@ -44,6 +44,18 @@ export const getProfile = asyncHandler(async (req, res: Response) => {
     throw new ApiError(404, 'User not found');
   }
   sendSuccess(res, 'Profile retrieved', { user: toPublicUser(user) });
+});
+
+export const updateProfile = asyncHandler(async (req, res: Response) => {
+  const input = req.body as UpdateProfileInput;
+  const user = await authService.updateProfile(req.user!.userId, input);
+  sendSuccess(res, 'Profile updated successfully', { user });
+});
+
+export const changePassword = asyncHandler(async (req, res: Response) => {
+  const input = req.body as ChangePasswordInput;
+  await authService.changePassword(req.user!.userId, input);
+  sendSuccess(res, 'Password changed successfully');
 });
 
 export const getStaff = asyncHandler(async (_req, res: Response) => {

@@ -46,3 +46,21 @@ export const SOCKET_EVENTS = {
   TICKET_OVERDUE: 'ticketOverdue',
   NEW_COMMENT: 'newComment',
 } as const;
+
+/** Supported ticket categories (shared with TVK-USER web & mobile app). */
+export const TICKET_CATEGORIES = [
+  'Technical',
+  'Billing',
+  'Account',
+  'Membership',
+  'Events',
+  'Volunteer',
+  'Complaint',
+  'Feedback',
+  'General',
+  'Media & Press',
+  'Suggestion',
+  'Other',
+] as const;
+
+export type TicketCategory = (typeof TICKET_CATEGORIES)[number];

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, refreshToken, getProfile, getStaff, forgotPassword, resetPassword, verifyOtp } from '../controllers/auth.controller';
+import { register, login, refreshToken, getProfile, updateProfile, changePassword, getStaff, forgotPassword, resetPassword, verifyOtp } from '../controllers/auth.controller';
 import { validate } from '../middleware/validate.middleware';
 import { authenticate } from '../middleware/auth.middleware';
 import { staffOnly } from '../middleware/role.middleware';
@@ -10,6 +10,8 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyOtpSchema,
+  updateProfileSchema,
+  changePasswordSchema,
 } from '../validators';
 
 const router = Router();
@@ -100,6 +102,10 @@ router.post('/reset-password', validate(resetPasswordSchema), resetPassword);
  *         description: Profile retrieved
  */
 router.get('/profile', authenticate, getProfile);
+
+router.patch('/profile', authenticate, validate(updateProfileSchema), updateProfile);
+
+router.post('/change-password', authenticate, validate(changePasswordSchema), changePassword);
 
 /**
  * @swagger
