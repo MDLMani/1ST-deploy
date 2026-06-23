@@ -18,7 +18,22 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   UPLOAD_DIR: z.string().default('uploads'),
   MAX_FILE_SIZE: z.coerce.number().default(5242880),
-  SWAGGER_SERVER_URL: z.string().default('http://localhost:5001'),
+  SWAGGER_SERVER_URL: z
+    .string()
+    .default(
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:5001'
+    ),
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:support@tvk.com'),
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  SMTP_FROM_EMAIL: z.string().default(''),
+  CRON_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -29,5 +44,16 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+export function isSmtpConfigured(): boolean {
+  return Boolean(
+    env.SMTP_HOST &&
+      env.SMTP_USER &&
+      env.SMTP_PASSWORD &&
+      env.SMTP_FROM_EMAIL &&
+      env.SMTP_PASSWORD !== 'your-app-password' &&
+      env.SMTP_USER !== 'your-email@gmail.com'
+  );
+}
 
 export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim());

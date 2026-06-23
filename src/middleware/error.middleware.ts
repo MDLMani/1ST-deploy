@@ -14,7 +14,7 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (err instanceof ApiError) {
-    sendError(res, err.message, err.statusCode);
+    sendError(res, err.message, err.statusCode, err.meta);
     return;
   }
 
@@ -28,7 +28,8 @@ export const errorHandler = (
     return;
   }
 
-  if (err instanceof SyntaxError && err.status === 400 && err.type === 'entity.parse.failed') {
+  const parseError = err as SyntaxError & { status?: number; type?: string };
+  if (err instanceof SyntaxError && parseError.status === 400 && parseError.type === 'entity.parse.failed') {
     sendError(res, 'Invalid JSON in request body', 400);
     return;
   }

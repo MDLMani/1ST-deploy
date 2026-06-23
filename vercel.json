@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/index.ts", "use": "@vercel/node" },
+    { "src": "api/cron/overdue.ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/cron/overdue", "dest": "/api/cron/overdue.ts" },
+    { "src": "/(.*)", "dest": "/api/index.ts" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/overdue",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

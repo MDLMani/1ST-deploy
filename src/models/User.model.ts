@@ -6,6 +6,10 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  resetOtpHash?: string;
+  resetOtpExpires?: Date;
+  resetOtpAttempts?: number;
+  resetOtpLastSentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +39,23 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: Object.values(UserRole),
       default: UserRole.USER,
+    },
+    resetOtpHash: {
+      type: String,
+      select: false,
+    },
+    resetOtpExpires: {
+      type: Date,
+      select: false,
+    },
+    resetOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    resetOtpLastSentAt: {
+      type: Date,
+      select: false,
     },
   },
   {

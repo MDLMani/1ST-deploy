@@ -4,7 +4,7 @@ import { userRepository } from '../repositories/user.repository';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import { ApiError } from '../utils/ApiError';
-import { RegisterInput, LoginInput, RefreshTokenInput } from '../validators';
+import { RegisterInput, LoginInput, RefreshTokenInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput, UpdateProfileInput, ChangePasswordInput } from '../validators';
 
 const toPublicUser = (user: { _id: unknown; name: string; email: string; role: string }) => ({
   id: String(user._id),
@@ -46,7 +46,42 @@ export const getProfile = asyncHandler(async (req, res: Response) => {
   sendSuccess(res, 'Profile retrieved', { user: toPublicUser(user) });
 });
 
+export const updateProfile = asyncHandler(async (req, res: Response) => {
+  const input = req.body as UpdateProfileInput;
+  const user = await authService.updateProfile(req.user!.userId, input);
+  sendSuccess(res, 'Profile updated successfully', { user });
+});
+
+export const changePassword = asyncHandler(async (req, res: Response) => {
+  const input = req.body as ChangePasswordInput;
+  await authService.changePassword(req.user!.userId, input);
+  sendSuccess(res, 'Password changed successfully');
+});
+
 export const getStaff = asyncHandler(async (_req, res: Response) => {
   const staff = await userRepository.findAgentsAndAdmins();
   sendSuccess(res, 'Staff retrieved', staff.map(toPublicUser));
+});
+
+export const forgotPassword = asyncHandler(async (req, res: Response) => {
+  const input = req.body as ForgotPasswordInput;
+  const result = await authService.forgotPassword(input);
+  sendSuccess(
+    res,
+    'If an account exists with that email, a password reset OTP has been sent.',
+    result,
+    200
+  );
+});
+
+export const resetPassword = asyncHandler(async (req, res: Response) => {
+  const input = req.body as ResetPasswordInput;
+  await authService.resetPassword(input);
+  sendSuccess(res, 'Password reset successful. You can now sign in with your new password.');
+});
+
+export const verifyOtp = asyncHandler(async (req, res: Response) => {
+  const input = req.body as VerifyOtpInput;
+  await authService.verifyOtp(input);
+  sendSuccess(res, 'OTP verified successfully', { valid: true });
 });

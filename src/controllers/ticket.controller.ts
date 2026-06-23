@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ticketService } from '../services/ticket.service';
+import { TICKET_CATEGORIES } from '../constants';
 import { asyncHandler, getRouteParam } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import {
@@ -21,6 +22,10 @@ const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
     path: path.join(env.UPLOAD_DIR, file.filename),
   }));
 };
+
+export const getTicketCategories = asyncHandler(async (_req, res: Response) => {
+  sendSuccess(res, 'Ticket categories', [...TICKET_CATEGORIES]);
+});
 
 export const createTicket = asyncHandler(async (req, res: Response) => {
   const input = req.body as CreateTicketInput;
@@ -69,6 +74,11 @@ export const getAllTickets = asyncHandler(async (req, res: Response) => {
     total,
     totalPages: Math.ceil(total / limit),
   });
+});
+
+export const getTicketStats = asyncHandler(async (_req, res: Response) => {
+  const stats = await ticketService.getDashboardStats();
+  sendSuccess(res, 'Dashboard stats retrieved', stats);
 });
 
 export const getTicketById = asyncHandler(async (req, res: Response) => {

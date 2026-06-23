@@ -3,6 +3,8 @@ import {
   createTicket,
   getMyTickets,
   getAllTickets,
+  getTicketStats,
+  getTicketCategories,
   getTicketById,
   updateStatus,
   assignTicket,
@@ -83,6 +85,20 @@ router.get('/my', validate(paginationSchema, 'query'), getMyTickets);
  *         description: All tickets retrieved
  */
 router.get('/all', staffOnly, validate(paginationSchema, 'query'), getAllTickets);
+
+/**
+ * @swagger
+ * /api/v1/tickets/stats:
+ *   get:
+ *     tags: [Tickets]
+ *     summary: Dashboard stats (staff only)
+ *     responses:
+ *       200:
+ *         description: Aggregated ticket metrics
+ */
+router.get('/stats', staffOnly, getTicketStats);
+
+router.get('/categories', getTicketCategories);
 
 /**
  * @swagger

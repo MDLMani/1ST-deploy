@@ -11,6 +11,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { requestLogMiddleware } from './middleware/requestLog.middleware';
 
 const app = express();
+const isDev = env.NODE_ENV === 'development';
 
 // Health check before security middleware — must be reachable from mobile on LAN
 app.get('/health', (_req, res) => {
@@ -25,16 +26,27 @@ app.use(
   })
 );
 
-app.use(
-  rateLimit({
-    windowMs: env.RATE_LIMIT_WINDOW_MS,
-    max: env.RATE_LIMIT_MAX,
-    message: {
-      success: false,
-      message: 'Too many requests, please try again later',
-    },
-  })
-);
+const apiLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  max: isDev ? Math.max(env.RATE_LIMIT_MAX, 500) : env.RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later',
+  },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 50 : 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many login attempts, please try again later',
+  },
+});
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -44,6 +56,9 @@ app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+app.use('/api/v1/auth/login', authLimiter);
+app.use('/api/v1/auth/register', authLimiter);
+app.use('/api/v1', apiLimiter);
 app.use('/api/v1', routes);
 
 app.use(notFoundHandler);

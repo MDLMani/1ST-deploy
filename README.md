@@ -74,6 +74,64 @@ docker-compose up -d
 API: `http://localhost:5000`  
 Swagger: `http://localhost:5000/api-docs`
 
+## Deploy to Vercel
+
+### Prerequisites
+
+- [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (required — local MongoDB will not work on Vercel)
+- GitHub repo connected to Vercel
+
+### Environment variables
+
+Set these in the Vercel project dashboard (Settings → Environment Variables):
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `NODE_ENV` | Yes | `production` |
+| `MONGODB_URI` | Yes | Atlas connection string |
+| `JWT_ACCESS_SECRET` | Yes | 16+ characters |
+| `JWT_REFRESH_SECRET` | Yes | 16+ characters |
+| `CORS_ORIGIN` | Yes | Comma-separated frontend URLs |
+| `CRON_SECRET` | Yes | Random secret for overdue cron job |
+| `VAPID_PUBLIC_KEY` | Optional | Web push |
+| `VAPID_PRIVATE_KEY` | Optional | Web push |
+| `SMTP_*` | Optional | Email OTP |
+
+`SWAGGER_SERVER_URL` defaults to your Vercel URL automatically.
+
+### Deploy
+
+```bash
+# CLI
+npm i -g vercel
+vercel login
+vercel --prod
+```
+
+Or connect the GitHub repo in the [Vercel dashboard](https://vercel.com) and deploy.
+
+### Verify
+
+```bash
+curl https://your-app.vercel.app/health
+```
+
+### Vercel limitations
+
+- **Socket.io** does not run on Vercel serverless. Real-time events are disabled; use the notifications API instead.
+- **File uploads** are stored on ephemeral disk and will not persist. Use S3 or Vercel Blob for production attachments.
+- **Overdue reminders** run via Vercel Cron at `/api/cron/overdue` (hourly).
+
+### Docker / traditional hosting
+
+For full Socket.io, cron, and local file uploads, use Docker on Railway, Render, or Fly.io:
+
+```bash
+docker-compose up -d
+# or
+docker build -t tvkssbe . && docker run -p 5000:5000 --env-file .env tvkssbe
+```
+
 ## API Endpoints
 
 ### Auth
