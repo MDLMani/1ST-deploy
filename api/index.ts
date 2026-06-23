@@ -17,25 +17,61 @@ async function bootstrap(): Promise<void> {
   isReady = true;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const path = req.url?.split('?')[0] ?? '';
+function getPath(req: VercelRequest): string {
+  return req.url?.split('?')[0] ?? '';
+}
 
+function handlePublicPath(path: string, res: VercelResponse): boolean {
   if (path === '/health') {
-    return res.json({
+    res.json({
       success: true,
       message: 'TVK Support API is running',
       data: { status: 'ok' },
     });
+    return true;
+  }
+
+  if (path === '/') {
+    res.json({
+      success: true,
+      message: 'TVK Support Ticket API',
+      data: {
+        docs: '/api-docs',
+        health: '/health',
+        api: '/api/v1',
+      },
+    });
+    return true;
+  }
+
+  if (path === '/favicon.ico' || path === '/favicon.png') {
+    res.status(204).end();
+    return true;
+  }
+
+  return false;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const path = getPath(req);
+
+  if (handlePublicPath(path, res)) {
+    return;
   }
 
   try {
     await bootstrap();
     return app(req, res);
   } catch (error) {
+    const message =
+      error instanceof Error && error.message.includes('whitelist')
+        ? 'Database connection failed. Allow 0.0.0.0/0 in MongoDB Atlas Network Access.'
+        : 'Service temporarily unavailable';
+
     console.error('API bootstrap failed', error);
-    return res.status(500).json({
+    return res.status(503).json({
       success: false,
-      message: 'Service temporarily unavailable',
+      message,
     });
   }
 }
