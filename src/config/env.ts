@@ -18,7 +18,13 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   UPLOAD_DIR: z.string().default('uploads'),
   MAX_FILE_SIZE: z.coerce.number().default(5242880),
-  SWAGGER_SERVER_URL: z.string().default('http://localhost:5001'),
+  SWAGGER_SERVER_URL: z
+    .string()
+    .default(
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:5001'
+    ),
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:support@tvk.com'),
@@ -27,6 +33,7 @@ const envSchema = z.object({
   SMTP_USER: z.string().default(''),
   SMTP_PASSWORD: z.string().default(''),
   SMTP_FROM_EMAIL: z.string().default(''),
+  CRON_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
