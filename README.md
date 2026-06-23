@@ -120,7 +120,7 @@ curl https://your-app.vercel.app/health
 
 - **Socket.io** does not run on Vercel serverless. Real-time events are disabled; use the notifications API instead.
 - **File uploads** are stored on ephemeral disk and will not persist. Use S3 or Vercel Blob for production attachments.
-- **Overdue reminders** run via Vercel Cron at `/api/cron/overdue` (hourly).
+- **Overdue reminders** run via Vercel Cron at `/api/cron/overdue` (daily at 00:00 UTC on Hobby; hourly on Docker/traditional hosting).
 
 ### Docker / traditional hosting
 
@@ -181,7 +181,7 @@ Connect with JWT token in `auth.token` or `Authorization` header.
 
 ## Overdue Reminder System
 
-Cron job runs every hour:
+Cron job runs every hour on Docker/traditional hosting (daily on Vercel Hobby):
 - **CRITICAL:** overdue after 12 hours
 - **HIGH:** overdue after 24 hours
 - **MEDIUM:** overdue after 48 hours
