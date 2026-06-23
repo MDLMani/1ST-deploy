@@ -18,6 +18,16 @@ async function bootstrap(): Promise<void> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const path = req.url?.split('?')[0] ?? '';
+
+  if (path === '/health') {
+    return res.json({
+      success: true,
+      message: 'TVK Support API is running',
+      data: { status: 'ok' },
+    });
+  }
+
   try {
     await bootstrap();
     return app(req, res);

@@ -73,7 +73,10 @@ export const connectDatabase = async (): Promise<void> => {
 
     if (!cache.promise) {
       const uri = await resolveMongoUri();
-      cache.promise = mongoose.connect(uri).then((connection) => {
+      cache.promise = mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+      }).then((connection) => {
         logger.info('MongoDB connected successfully');
         attachConnectionListeners();
         return connection;

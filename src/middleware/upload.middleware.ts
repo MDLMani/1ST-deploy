@@ -6,7 +6,8 @@ import { env } from '../config/env';
 import { ALLOWED_MIME_TYPES } from '../constants';
 import { ApiError } from '../utils/ApiError';
 
-const uploadDir = path.join(process.cwd(), env.UPLOAD_DIR);
+const isVercel = Boolean(process.env.VERCEL);
+const uploadDir = path.join(isVercel ? '/tmp' : process.cwd(), env.UPLOAD_DIR);
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
