@@ -8,13 +8,15 @@ import { getTicketOwnerId } from '../utils/ticket.helpers';
 import { notificationService } from './notification.service';
 import { userRepository } from '../repositories/user.repository';
 import { Types } from 'mongoose';
+import { slaService } from './sla.service';
 
 export class CommentService {
   async addComment(
     ticketId: string,
     senderId: string,
     senderRole: UserRole,
-    input: CreateCommentInput
+    input: CreateCommentInput,
+    isInternal: boolean = false
   ) {
     const ticket = await ticketRepository.findById(ticketId);
     if (!ticket) {
@@ -33,6 +35,7 @@ export class CommentService {
       ticket: new Types.ObjectId(ticketId),
       sender: new Types.ObjectId(senderId),
       message: input.message,
+      isInternal,
     });
 
     const io = getSocketIO();
@@ -55,10 +58,15 @@ export class CommentService {
       );
     }
 
+    // Track first staff response for SLA
+    if (isStaff && !isInternal) {
+      await slaService.updateFirstResponseTime(ticketId);
+    }
+
     return comment;
   }
 
-  async getComments(ticketId: string, requesterId: string, requesterRole: UserRole) {
+  async getComments(ticketId: string, requesterId: string, requesterRole: UserRole, includeInternal: boolean = false) {
     const ticket = await ticketRepository.findById(ticketId);
     if (!ticket) {
       throw new ApiError(404, 'Ticket not found');
@@ -72,7 +80,12 @@ export class CommentService {
       throw new ApiError(403, 'Access denied');
     }
 
-    return commentRepository.findByTicketId(ticketId);
+    const filter: any = {};
+    if (!includeInternal) {
+      filter.isInternal = { $ne: true };
+    }
+
+    return commentRepository.findByTicketId(ticketId, filter);
   }
 }
 

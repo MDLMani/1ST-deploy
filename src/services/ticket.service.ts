@@ -1,5 +1,7 @@
+import { departmentRepository } from '../repositories/department.repository';
 import { ticketRepository, TicketQueryOptions } from '../repositories/ticket.repository';
 import { userRepository } from '../repositories/user.repository';
+import { tagRepository } from '../repositories/tag.repository';
 import { ApiError } from '../utils/ApiError';
 import { TicketPriority, TicketStatus, UserRole, SOCKET_EVENTS } from '../constants';
 import { IAttachment } from '../interfaces';
@@ -7,6 +9,10 @@ import { CreateTicketInput, UpdateStatusInput, AssignTicketInput } from '../vali
 import { getSocketIO } from '../sockets';
 import { getTicketOwnerId } from '../utils/ticket.helpers';
 import { notificationService } from './notification.service';
+import { customFieldService } from './customField.service';
+import { slaService } from './sla.service';
+import { knowledgeBaseService } from './knowledgeBase.service';
+import { assignmentService } from './assignment.service';
 import { Types } from 'mongoose';
 
 export class TicketService {
@@ -19,6 +25,31 @@ export class TicketService {
   async createTicket(userId: string, input: CreateTicketInput, attachments: IAttachment[] = []) {
     const ticketNumber = await this.generateTicketNumber();
 
+    let customFields = input.customFields;
+    if (typeof customFields === 'string') {
+      try {
+        customFields = JSON.parse(customFields);
+      } catch {
+        customFields = undefined;
+      }
+    }
+
+    let tagIds = input.tags;
+    if (tagIds && !Array.isArray(tagIds)) {
+      tagIds = [tagIds as unknown as string];
+    }
+
+    let departmentId = input.department;
+    if (departmentId && !Types.ObjectId.isValid(departmentId)) {
+      const dept = await departmentRepository.findBySlug(departmentId);
+      departmentId = dept?._id.toString();
+    }
+
+    // Validate custom fields if provided
+    if (customFields && Object.keys(customFields).length > 0) {
+      await customFieldService.validateCustomFields(departmentId, customFields);
+    }
+
     const ticket = await ticketRepository.create({
       ticketNumber,
       user: new Types.ObjectId(userId),
@@ -30,18 +61,53 @@ export class TicketService {
       attachments,
       overdue: false,
       reminderCount: 0,
+      department: departmentId ? new Types.ObjectId(departmentId) : undefined,
+      tags: tagIds ? tagIds.map((id) => new Types.ObjectId(id)) : [],
+      customFields: customFields ? new Map(Object.entries(customFields)) : new Map(),
+      isInternal: input.isInternal ?? false,
     });
 
+    // Start SLA
+    await slaService.startSLA(ticket._id.toString());
+
+    // Auto-assign if department has matching rules
+    const deptId = ticket.department?.toString();
+    if (deptId) {
+      try {
+        await assignmentService.autoAssignTicket(
+          ticket._id.toString(),
+          deptId,
+          input.category,
+          ticket.priority
+        );
+      } catch {
+        // Ignore auto-assignment errors
+      }
+    }
+
+    // Increment tag usage
+    if (tagIds && tagIds.length > 0) {
+      await tagRepository.incrementUsage(tagIds);
+    }
+
     const populated = await ticketRepository.findById(ticket._id.toString());
+
+    // Suggest knowledge base articles
+    let suggestedArticles: any[] = [];
+    try {
+      const tags = populated?.tags?.map((t: any) => t.name || '') ?? [];
+      suggestedArticles = await knowledgeBaseService.getSuggestedArticles(input.category, tags, 3);
+    } catch {
+      // Ignore KB errors
+    }
 
     const io = getSocketIO();
     if (io && populated) {
       io.emit(SOCKET_EVENTS.TICKET_CREATED, populated);
     }
 
-    const ownerId = userId;
     await notificationService.notifyUser(
-      ownerId,
+      userId,
       'TICKET_CREATED',
       {
         ticketNumber: ticket.ticketNumber,
@@ -50,7 +116,7 @@ export class TicketService {
       ticket._id.toString()
     );
 
-    return populated;
+    return { ...populated?.toObject(), suggestedArticles };
   }
 
   async getUserTickets(userId: string, options: TicketQueryOptions) {
@@ -104,6 +170,13 @@ export class TicketService {
 
     if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(input.status)) {
       updateData.overdue = false;
+      updateData.resolvedAt = new Date();
+    }
+
+    if (input.status === TicketStatus.PENDING) {
+      await slaService.pauseSLA(ticketId);
+    } else if (ticket.status === TicketStatus.PENDING) {
+      await slaService.resumeSLA(ticketId);
     }
 
     const updated = await ticketRepository.updateById(ticketId, updateData);
@@ -163,6 +236,9 @@ export class TicketService {
       assignedTo: input.assignedTo,
       status: TicketStatus.IN_PROGRESS,
     });
+
+    // Reset SLA response timer on re-assignment
+    await slaService.startSLA(ticketId);
 
     if (!updated) {
       throw new ApiError(404, 'Ticket not found');

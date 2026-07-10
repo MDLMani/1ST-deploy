@@ -132,7 +132,13 @@ export class AuthService {
     try {
       await sendPasswordResetOtp(user.email, otp, user.name);
     } catch (error) {
-      logger.error('Failed to send password reset email', { email: user.email, error });
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      logger.error('Failed to send password reset email', {
+        email: user.email,
+        message: error instanceof Error ? error.message : String(error),
+      });
       throw new ApiError(503, 'Failed to send reset email. Please try again later.');
     }
   }

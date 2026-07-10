@@ -27,6 +27,11 @@ const envSchema = z.object({
   SMTP_USER: z.string().default(''),
   SMTP_PASSWORD: z.string().default(''),
   SMTP_FROM_EMAIL: z.string().default(''),
+  /** When true, log OTP to server console if SMTP is not configured (local testing only). */
+  SMTP_LOG_OTP: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -47,6 +52,11 @@ export function isSmtpConfigured(): boolean {
       env.SMTP_PASSWORD !== 'your-app-password' &&
       env.SMTP_USER !== 'your-email@gmail.com'
   );
+}
+
+/** Log OTP to console instead of email when SMTP is missing (dev / SMTP_LOG_OTP=true). */
+export function canLogOtpWithoutSmtp(): boolean {
+  return env.NODE_ENV === 'development' || env.SMTP_LOG_OTP;
 }
 
 export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim());

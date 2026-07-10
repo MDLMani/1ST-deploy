@@ -28,9 +28,12 @@ export const errorHandler = (
     return;
   }
 
-  if (err instanceof SyntaxError && err.status === 400 && err.type === 'entity.parse.failed') {
-    sendError(res, 'Invalid JSON in request body', 400);
-    return;
+  if (err instanceof SyntaxError) {
+    const bodyParserErr = err as SyntaxError & { status?: number; type?: string };
+    if (bodyParserErr.status === 400 && bodyParserErr.type === 'entity.parse.failed') {
+      sendError(res, 'Invalid JSON in request body', 400);
+      return;
+    }
   }
 
   if (err.name === 'MongoServerError' && (err as { code?: number }).code === 11000) {

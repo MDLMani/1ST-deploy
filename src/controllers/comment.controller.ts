@@ -3,6 +3,7 @@ import { commentService } from '../services/comment.service';
 import { asyncHandler, getRouteParam } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import { CreateCommentInput } from '../validators';
+import { UserRole } from '../constants';
 
 export const addComment = asyncHandler(async (req, res: Response) => {
   const input = req.body as CreateCommentInput;
@@ -15,11 +16,26 @@ export const addComment = asyncHandler(async (req, res: Response) => {
   sendSuccess(res, 'Comment added successfully', comment, 201);
 });
 
+export const addInternalNote = asyncHandler(async (req, res: Response) => {
+  const input = req.body as CreateCommentInput;
+  const comment = await commentService.addComment(
+    getRouteParam(req.params.id),
+    req.user!.userId,
+    req.user!.role,
+    input,
+    true
+  );
+  sendSuccess(res, 'Internal note added', comment, 201);
+});
+
 export const getComments = asyncHandler(async (req, res: Response) => {
+  const includeInternal = req.query.includeInternal === 'true' &&
+    [UserRole.ADMIN, UserRole.SUPPORT_AGENT].includes(req.user!.role);
   const comments = await commentService.getComments(
     getRouteParam(req.params.id),
     req.user!.userId,
-    req.user!.role
+    req.user!.role,
+    includeInternal
   );
   sendSuccess(res, 'Comments retrieved', comments);
 });

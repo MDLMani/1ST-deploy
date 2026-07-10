@@ -6,6 +6,8 @@ import { initSocketIO } from './sockets';
 import { initWebPush } from './services/push.service';
 import { verifySmtpConnection } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
+import { startSLAMonitorJob } from './jobs/slaMonitor.job';
+import { startEscalationProcessorJob } from './jobs/escalationProcessor.job';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
@@ -17,6 +19,8 @@ const startServer = async (): Promise<void> => {
   const httpServer = http.createServer(app);
   initSocketIO(httpServer);
   startOverdueReminderJob();
+  startSLAMonitorJob();
+  startEscalationProcessorJob();
 
   httpServer.listen(env.PORT, env.HOST, () => {
     logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);

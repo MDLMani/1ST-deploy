@@ -32,6 +32,15 @@ export class UserRepository {
   async findAgentsAndAdmins(): Promise<IUser[]> {
     return User.find({
       role: { $in: [UserRole.ADMIN, UserRole.SUPPORT_AGENT] },
+      isActive: { $ne: false },
+    }).exec();
+  }
+
+  async findActiveAgentsByDepartment(departmentId: string): Promise<IUser[]> {
+    return User.find({
+      role: { $in: [UserRole.ADMIN, UserRole.SUPPORT_AGENT] },
+      department: departmentId,
+      isActive: { $ne: false },
     }).exec();
   }
 

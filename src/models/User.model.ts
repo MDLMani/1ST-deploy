@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 import { UserRole } from '../constants';
 
 export interface IUser extends Document {
@@ -6,6 +6,10 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  department?: Types.ObjectId;
+  skills?: string[];
+  isActive?: boolean;
+  maxTicketLoad?: number;
   resetOtpHash?: string;
   resetOtpExpires?: Date;
   resetOtpAttempts?: number;
@@ -38,6 +42,22 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: Object.values(UserRole),
       default: UserRole.USER,
+    },
+    department: {
+      type: Schema.Types.ObjectId,
+      ref: 'Department',
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    maxTicketLoad: {
+      type: Number,
+      default: 20,
     },
     resetOtpHash: {
       type: String,

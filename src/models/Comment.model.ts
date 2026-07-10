@@ -4,6 +4,7 @@ export interface IComment extends Document {
   ticket: Types.ObjectId;
   sender: Types.ObjectId;
   message: string;
+  isInternal: boolean;
   createdAt: Date;
 }
 
@@ -23,6 +24,10 @@ const commentSchema = new Schema<IComment>(
       type: String,
       required: [true, 'Message is required'],
       trim: true,
+    },
+    isInternal: {
+      type: Boolean,
+      default: false,
     },
   },
   {

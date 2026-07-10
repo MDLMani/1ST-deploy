@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ticketService } from '../services/ticket.service';
+import { slaService } from '../services/sla.service';
 import { asyncHandler, getRouteParam } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import {
@@ -103,4 +104,9 @@ export const assignTicket = asyncHandler(async (req, res: Response) => {
     req.user!.role
   );
   sendSuccess(res, 'Ticket assigned successfully', ticket);
+});
+
+export const getTicketSLAStatus = asyncHandler(async (req, res: Response) => {
+  const status = await slaService.getTicketSLAStatus(getRouteParam(req.params.id));
+  sendSuccess(res, 'SLA status retrieved', status);
 });

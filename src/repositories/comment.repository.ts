@@ -8,8 +8,8 @@ export class CommentRepository {
       .exec() as Promise<IComment>;
   }
 
-  async findByTicketId(ticketId: string): Promise<IComment[]> {
-    return Comment.find({ ticket: ticketId })
+  async findByTicketId(ticketId: string, filter: Record<string, any> = {}): Promise<IComment[]> {
+    return Comment.find({ ticket: ticketId, ...filter })
       .populate('sender', 'name email role')
       .sort({ createdAt: 1 })
       .exec();

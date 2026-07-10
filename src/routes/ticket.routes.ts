@@ -7,8 +7,10 @@ import {
   getTicketById,
   updateStatus,
   assignTicket,
+  getTicketSLAStatus,
 } from '../controllers/ticket.controller';
-import { addComment, getComments } from '../controllers/comment.controller';
+import { addComment, getComments, addInternalNote } from '../controllers/comment.controller';
+import { mergeTickets, linkRelated, unlinkRelated } from '../controllers/merge.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { staffOnly } from '../middleware/role.middleware';
 import { validate } from '../middleware/validate.middleware';
@@ -18,6 +20,9 @@ import {
   updateStatusSchema,
   assignTicketSchema,
   createCommentSchema,
+  createInternalNoteSchema,
+  mergeTicketsSchema,
+  linkRelatedSchema,
   paginationSchema,
 } from '../validators';
 
@@ -202,5 +207,111 @@ router.post('/:id/comments', validate(createCommentSchema), addComment);
  *         description: Comments retrieved
  */
 router.get('/:id/comments', getComments);
+
+/**
+ * @swagger
+ * /api/v1/tickets/merge:
+ *   post:
+ *     tags: [Tickets]
+ *     summary: Merge tickets (staff only)
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sourceIds: { type: array, items: { type: string } }
+ *               targetId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tickets merged
+ */
+router.post('/merge', staffOnly, validate(mergeTicketsSchema), mergeTickets);
+
+/**
+ * @swagger
+ * /api/v1/tickets/{id}/sla:
+ *   get:
+ *     tags: [Tickets]
+ *     summary: Get SLA status for a ticket
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: SLA status retrieved
+ */
+router.get('/:id/sla', getTicketSLAStatus);
+
+/**
+ * @swagger
+ * /api/v1/tickets/{id}/notes:
+ *   post:
+ *     tags: [Tickets]
+ *     summary: Add internal note (staff only)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message: { type: string }
+ *     responses:
+ *       201:
+ *         description: Internal note added
+ */
+router.post('/:id/notes', staffOnly, validate(createInternalNoteSchema), addInternalNote);
+
+/**
+ * @swagger
+ * /api/v1/tickets/{id}/related:
+ *   post:
+ *     tags: [Tickets]
+ *     summary: Link related tickets
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               relatedIds: { type: array, items: { type: string } }
+ *     responses:
+ *       200:
+ *         description: Related tickets linked
+ */
+router.post('/:id/related', staffOnly, validate(linkRelatedSchema), linkRelated);
+
+/**
+ * @swagger
+ * /api/v1/tickets/{id}/related/{relatedId}:
+ *   delete:
+ *     tags: [Tickets]
+ *     summary: Unlink a related ticket
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: relatedId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Related ticket unlinked
+ */
+router.delete('/:id/related/:relatedId', staffOnly, unlinkRelated);
 
 export default router;
