@@ -1,15 +1,25 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
-import { UserRole } from '../constants';
+import { AccessLevel, DEFAULT_ORGANIZATION_ID, UserRole } from '../constants';
 
 export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
   role: UserRole;
+  organizationId?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  jobTitle?: string;
+  company?: string;
+  accessLevel?: AccessLevel;
+  reportingManager?: Types.ObjectId;
+  additionalInformation?: string;
   department?: Types.ObjectId;
   skills?: string[];
   isActive?: boolean;
   maxTicketLoad?: number;
+  invitation?: Types.ObjectId;
   resetOtpHash?: string;
   resetOtpExpires?: Date;
   resetOtpAttempts?: number;
@@ -43,9 +53,33 @@ const userSchema = new Schema<IUser>(
       enum: Object.values(UserRole),
       default: UserRole.USER,
     },
+    organizationId: {
+      type: String,
+      default: DEFAULT_ORGANIZATION_ID,
+      index: true,
+      trim: true,
+    },
+    firstName: { type: String, trim: true, maxlength: 80 },
+    lastName: { type: String, trim: true, maxlength: 80 },
+    phone: { type: String, trim: true, maxlength: 30 },
+    jobTitle: { type: String, trim: true, maxlength: 120 },
+    company: { type: String, trim: true, maxlength: 120 },
+    accessLevel: {
+      type: String,
+      enum: Object.values(AccessLevel),
+    },
+    reportingManager: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    additionalInformation: { type: String, trim: true, maxlength: 2000 },
     department: {
       type: Schema.Types.ObjectId,
       ref: 'Department',
+    },
+    invitation: {
+      type: Schema.Types.ObjectId,
+      ref: 'Invitation',
     },
     skills: {
       type: [String],

@@ -2,7 +2,11 @@ import nodemailer from 'nodemailer';
 import { canLogOtpWithoutSmtp, env, isSmtpConfigured } from '../config/env';
 import { logger } from '../utils/logger';
 import { ApiError } from '../utils/ApiError';
-import { renderPasswordResetOtpEmail } from '../templates/email.templates';
+import {
+  renderPasswordResetOtpEmail,
+  renderStaffInvitationEmail,
+  StaffInvitationTemplateVars,
+} from '../templates/email.templates';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -85,5 +89,37 @@ export async function sendPasswordResetOtp(to: string, otp: string, name: string
       503,
       'Failed to send reset email. Verify SMTP credentials (use a Gmail App Password if using Google).'
     );
+  }
+}
+
+export async function sendStaffInvitationEmail(
+  to: string,
+  vars: StaffInvitationTemplateVars
+): Promise<void> {
+  const { subject, text, html } = renderStaffInvitationEmail(vars);
+
+  if (!isSmtpConfigured()) {
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(`[INVITE] Staff invitation for ${to}: token=${vars.token}`);
+      return;
+    }
+    throw new ApiError(
+      503,
+      'Invitation email is not available. The server administrator must configure SMTP.'
+    );
+  }
+
+  try {
+    await getTransporter().sendMail({
+      from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
+      to,
+      subject,
+      text,
+      html,
+    });
+    logger.info(`Staff invitation email accepted by SMTP for ${to}`);
+  } catch (error) {
+    logger.error('SMTP sendMail failed for invitation', { email: to, message: formatError(error) });
+    throw new ApiError(503, 'Failed to send invitation email. Please try again later.');
   }
 }

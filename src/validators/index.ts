@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { UserRole, TicketPriority, TicketStatus, AssignmentStrategy, EscalationTrigger } from '../constants';
+import {
+  AccessLevel,
+  UserRole,
+  TicketPriority,
+  TicketStatus,
+  AssignmentStrategy,
+  EscalationTrigger,
+} from '../constants';
 
 export const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -304,3 +311,52 @@ export type SubmitRatingInput = z.infer<typeof submitRatingSchema>;
 export type MergeTicketsInput = z.infer<typeof mergeTicketsSchema>;
 export type LinkRelatedInput = z.infer<typeof linkRelatedSchema>;
 export type VoteArticleInput = z.infer<typeof voteArticleSchema>;
+
+const objectId = z.string().regex(/^[a-fA-F0-9]{24}$/, 'Invalid id');
+
+export const inviteUserSchema = z.object({
+  firstName: z.string().min(1, 'First name is required').max(80),
+  lastName: z.string().min(1, 'Last name is required').max(80),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().min(7, 'Phone is required').max(30),
+  jobTitle: z.string().min(1, 'Job title is required').max(120),
+  department: objectId.optional().or(z.literal('')),
+  company: z.string().min(1, 'Company / organization is required').max(120),
+  role: z.enum([UserRole.ADMIN, UserRole.SUPPORT_AGENT], {
+    errorMap: () => ({ message: 'Role must be admin or support_agent' }),
+  }),
+  accessLevel: z.nativeEnum(AccessLevel).optional(),
+  reportingManager: objectId.optional().or(z.literal('')),
+  additionalInformation: z.string().max(2000).optional(),
+});
+
+export const rejectInvitationSchema = z.object({
+  reason: z.string().max(1000).optional(),
+});
+
+export const keepPendingSchema = z.object({
+  note: z.string().min(1, 'Resolution note is required').max(1000),
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(16, 'Invitation token is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters').max(128),
+});
+
+export const setUserActiveSchema = z.object({
+  isActive: z.boolean(),
+});
+
+export const userManagementListQuerySchema = z.object({
+  filter: z
+    .enum(['all', 'pending_approval', 'overdue', 'approved', 'rejected', 'active', 'inactive'])
+    .optional(),
+  search: z.string().optional(),
+});
+
+export type InviteUserInput = z.infer<typeof inviteUserSchema>;
+export type RejectInvitationInput = z.infer<typeof rejectInvitationSchema>;
+export type KeepPendingInput = z.infer<typeof keepPendingSchema>;
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
+export type UserManagementListQuery = z.infer<typeof userManagementListQuerySchema>;

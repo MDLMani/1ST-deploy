@@ -4,6 +4,51 @@ export enum UserRole {
   SUPPORT_AGENT = 'support_agent',
 }
 
+/** Staff roles an admin may assign when inviting. Citizen `user` self-registers. */
+export const ASSIGNABLE_STAFF_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.SUPPORT_AGENT];
+
+export enum InvitationStatus {
+  SENT = 'sent',
+  ACCEPTED = 'accepted',
+  EXPIRED = 'expired',
+}
+
+export enum ApprovalStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  KEEP_PENDING = 'keep_pending',
+}
+
+export enum AccessLevel {
+  FULL = 'full',
+  STANDARD = 'standard',
+  LIMITED = 'limited',
+}
+
+export enum AccountStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  NONE = 'none',
+}
+
+export enum AuditAction {
+  INVITATION_CREATED = 'invitation_created',
+  INVITATION_SENT = 'invitation_sent',
+  INVITATION_ACCEPTED = 'invitation_accepted',
+  ROLE_ASSIGNED = 'role_assigned',
+  APPROVAL_REQUESTED = 'approval_requested',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  KEEP_PENDING = 'keep_pending',
+  USER_ACTIVATED = 'user_activated',
+  USER_DEACTIVATED = 'user_deactivated',
+}
+
+export const DEFAULT_ORGANIZATION_ID = 'tvk';
+export const INVITATION_EXPIRY_DAYS = 7;
+export const APPROVAL_OVERDUE_HOURS = 48;
+
 export enum TicketStatus {
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',

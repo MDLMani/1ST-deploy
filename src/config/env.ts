@@ -27,6 +27,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().default(''),
   SMTP_PASSWORD: z.string().default(''),
   SMTP_FROM_EMAIL: z.string().default(''),
+  /** Public URL used in invitation emails (token is appended as ?token=). */
+  INVITE_ACCEPT_URL: z.string().default(''),
   /** When true, log OTP to server console if SMTP is not configured (local testing only). */
   SMTP_LOG_OTP: z
     .enum(['true', 'false'])
@@ -59,4 +61,38 @@ export function canLogOtpWithoutSmtp(): boolean {
   return env.NODE_ENV === 'development' || env.SMTP_LOG_OTP;
 }
 
-export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim());
+export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+
+function isLocalDevHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '10.0.2.2' ||
+    hostname === env.LAN_IP ||
+    /^192\.168\.\d+\.\d+$/.test(hostname) ||
+    /^10\.\d+\.\d+\.\d+$/.test(hostname)
+  );
+}
+
+export function isAllowedCorsOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (corsOrigins.includes(origin) || corsOrigins.includes('*')) return true;
+  if (env.NODE_ENV !== 'development') return false;
+  try {
+    return isLocalDevHostname(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Reflect request origin for Flutter web (random ports) and native clients (no Origin). */
+export function corsOriginDelegate(
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+): void {
+  if (isAllowedCorsOrigin(origin)) {
+    callback(null, true);
+    return;
+  }
+  callback(new Error(`Not allowed by CORS: ${origin}`));
+}

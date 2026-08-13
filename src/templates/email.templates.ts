@@ -84,6 +84,97 @@ export function renderPasswordResetOtpEmail(vars: PasswordResetOtpTemplateVars) 
   return { subject, text, html };
 }
 
+export interface StaffInvitationTemplateVars {
+  firstName: string;
+  inviterName: string;
+  roleLabel: string;
+  organization: string;
+  token: string;
+  acceptUrl?: string;
+  expiryDays: number;
+}
+
+export function renderStaffInvitationEmail(vars: StaffInvitationTemplateVars) {
+  const subject = `You're invited to join ${vars.organization} support on TVK`;
+  const acceptLine = vars.acceptUrl
+    ? `Accept your invitation: ${vars.acceptUrl}`
+    : `Use this invitation token to accept: ${vars.token}`;
+
+  const text = [
+    `Hi ${vars.firstName},`,
+    '',
+    `${vars.inviterName} invited you to join ${vars.organization} as ${vars.roleLabel}.`,
+    '',
+    acceptLine,
+    '',
+    `This invitation expires in ${vars.expiryDays} days.`,
+    '',
+    'If you were not expecting this, you can ignore this email.',
+    '',
+    '— Tamilaga Vettri Kazhagam Support',
+  ].join('\n');
+
+  const cta = vars.acceptUrl
+    ? `<a href="${escapeHtml(vars.acceptUrl)}" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#c8102e;color:#ffffff;font-weight:700;text-decoration:none;">Accept invitation</a>
+       <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">Or use token: <code style="color:#f4c430;">${escapeHtml(vars.token)}</code></p>`
+    : `<p style="margin:0;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#9ca3af;">Invitation token</p>
+       <p style="margin:8px 0 0;font-size:18px;font-weight:700;letter-spacing:2px;color:#ffffff;word-break:break-all;">${escapeHtml(vars.token)}</p>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TVK staff invitation</title>
+</head>
+<body style="margin:0;padding:0;background:#0f0f12;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0f0f12;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#18181f;border:1px solid #2a2a35;border-radius:20px;overflow:hidden;">
+          <tr>
+            <td style="padding:28px 32px 20px;background:linear-gradient(135deg,#c8102e 0%,#8b0a1f 55%,#f4c430 140%);">
+              <p style="margin:0;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.85);">TVK Support</p>
+              <h1 style="margin:8px 0 0;font-size:24px;line-height:1.3;color:#ffffff;">Staff invitation</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#e5e7eb;">Hi ${escapeHtml(vars.firstName)},</p>
+              <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#cbd5e1;">
+                <strong style="color:#ffffff;">${escapeHtml(vars.inviterName)}</strong> invited you to join
+                <strong style="color:#ffffff;">${escapeHtml(vars.organization)}</strong> as
+                <strong style="color:#f4c430;">${escapeHtml(vars.roleLabel)}</strong>.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="padding:20px;border-radius:16px;background:#111118;border:1px dashed #f4c430;">
+                    ${cta}
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#94a3b8;">
+                This invitation expires in <strong style="color:#ffffff;">${vars.expiryDays} days</strong>.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px 24px;border-top:1px solid #2a2a35;background:#121218;">
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+                Tamilaga Vettri Kazhagam — Support System
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

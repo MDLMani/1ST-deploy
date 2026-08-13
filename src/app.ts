@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import path from 'path';
-import { env, corsOrigins } from './config/env';
+import { env, corsOriginDelegate } from './config/env';
 import { swaggerSpec } from './config/swagger';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
@@ -21,7 +21,7 @@ app.get('/health', (_req, res) => {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
-    origin: corsOrigins,
+    origin: corsOriginDelegate,
     credentials: true,
   })
 );

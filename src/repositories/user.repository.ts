@@ -1,6 +1,19 @@
 import { FilterQuery, UpdateQuery } from 'mongoose';
 import { User, IUser } from '../models/User.model';
-import { UserRole } from '../constants';
+import { DEFAULT_ORGANIZATION_ID, UserRole } from '../constants';
+
+export function organizationFilter(organizationId: string): FilterQuery<IUser> {
+  if (organizationId === DEFAULT_ORGANIZATION_ID) {
+    return {
+      $or: [
+        { organizationId: DEFAULT_ORGANIZATION_ID },
+        { organizationId: { $exists: false } },
+        { organizationId: null },
+      ],
+    };
+  }
+  return { organizationId };
+}
 
 export class UserRepository {
   async create(data: Partial<IUser>): Promise<IUser> {
@@ -64,6 +77,21 @@ export class UserRepository {
 
   async findAll(filter: FilterQuery<IUser> = {}): Promise<IUser[]> {
     return User.find(filter).exec();
+  }
+
+  async findStaffByOrganization(organizationId: string): Promise<IUser[]> {
+    return User.find({
+      ...organizationFilter(organizationId),
+      role: { $in: [UserRole.ADMIN, UserRole.SUPPORT_AGENT] },
+    })
+      .populate('department', 'name slug')
+      .populate('reportingManager', 'name email role')
+      .sort({ name: 1 })
+      .exec();
+  }
+
+  async findByIdInOrg(id: string, organizationId: string): Promise<IUser | null> {
+    return User.findOne({ _id: id, ...organizationFilter(organizationId) }).exec();
   }
 }
 
