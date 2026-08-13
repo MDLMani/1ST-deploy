@@ -189,7 +189,7 @@ export class TicketRepository {
         .populate('department', 'name slug')
         .populate('tags', 'name color')
         .sort({ createdAt: -1 })
-        .limit(5)
+        .limit(12)
         .exec(),
       satisfactionRepository.getCSATStats(),
     ]);
