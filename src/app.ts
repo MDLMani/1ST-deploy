@@ -28,9 +28,14 @@ app.use(
 
 const apiLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
-  max: isDev ? Math.max(env.RATE_LIMIT_MAX, 500) : env.RATE_LIMIT_MAX,
+  max: isDev ? 10000 : env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    if (isDev) return true;
+    const path = req.originalUrl || req.path;
+    return path.includes('/notifications') || path.includes('/refresh-token');
+  },
   message: {
     success: false,
     message: 'Too many requests, please try again later',

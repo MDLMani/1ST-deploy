@@ -81,6 +81,14 @@ export class TicketService {
       tags: tagIds ? tagIds.map((id) => new Types.ObjectId(id)) : [],
       customFields: customFields ? new Map(Object.entries(customFields)) : new Map(),
       isInternal: input.isInternal ?? false,
+      identity:
+        input.identityFullName && input.identityFatherName && input.identityIdType
+          ? {
+              fullName: input.identityFullName.trim(),
+              fatherName: input.identityFatherName.trim(),
+              idType: input.identityIdType.trim(),
+            }
+          : undefined,
     });
 
     // Start SLA

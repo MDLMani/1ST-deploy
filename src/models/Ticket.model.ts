@@ -35,6 +35,11 @@ export interface ITicket extends Document {
   };
   escalationLevel: number;
   knowledgeBaseLinks: Types.ObjectId[];
+  identity?: {
+    fullName: string;
+    fatherName: string;
+    idType: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -160,6 +165,11 @@ const ticketSchema = new Schema<ITicket>(
       type: Schema.Types.ObjectId,
       ref: 'KnowledgeBase',
     }],
+    identity: {
+      fullName: { type: String, trim: true, maxlength: 120 },
+      fatherName: { type: String, trim: true, maxlength: 120 },
+      idType: { type: String, trim: true, maxlength: 40 },
+    },
   },
   {
     timestamps: true,

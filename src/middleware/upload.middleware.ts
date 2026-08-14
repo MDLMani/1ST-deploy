@@ -31,7 +31,7 @@ const fileFilter = (
   if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new ApiError(400, 'Invalid file type. Allowed: images and PDF') as unknown as null, false);
+    cb(new ApiError(400, 'Invalid file type. Allowed: images, PDF, text, and Word documents') as unknown as null, false);
   }
 };
 
@@ -41,7 +41,7 @@ export const upload = multer({
   limits: { fileSize: env.MAX_FILE_SIZE },
 });
 
-export const uploadAttachments = upload.array('attachments', 5);
+export const uploadAttachments = upload.array('attachments', 8);
 
 const ASSISTANT_MIME_TYPES = [
   ...ALLOWED_MIME_TYPES,

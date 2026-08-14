@@ -213,6 +213,10 @@ export const ALLOWED_MIME_TYPES = [
   'image/gif',
   'image/webp',
   'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
 export const SOCKET_EVENTS = {

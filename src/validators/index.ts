@@ -53,6 +53,16 @@ export const verifyOtpSchema = z.object({
     .regex(/^\d{6}$/, 'OTP must be 6 digits'),
 });
 
+const formJson = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((val) => {
+    if (typeof val !== 'string') return val;
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val;
+    }
+  }, schema);
+
 export const createTicketSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200),
   description: z.string().min(10, 'Description must be at least 10 characters'),
@@ -63,9 +73,12 @@ export const createTicketSchema = z.object({
   district: z.string().max(80).optional(),
   taluk: z.string().max(80).optional(),
   city: z.string().max(120).optional(),
-  tags: z.array(z.string()).optional(),
-  customFields: z.record(z.string(), z.any()).optional(),
+  tags: formJson(z.array(z.string()).optional()),
+  customFields: formJson(z.record(z.string(), z.any()).optional()),
   isInternal: z.boolean().optional(),
+  identityFullName: z.string().min(2).max(120).optional(),
+  identityFatherName: z.string().min(2).max(120).optional(),
+  identityIdType: z.string().min(2).max(40).optional(),
 });
 
 export const updateStatusSchema = z.object({
