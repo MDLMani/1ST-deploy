@@ -7,7 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "seed:tn-locations": "tsx src/scripts/seedTnLocations.ts",
+    "seed:departments": "tsx src/scripts/seedDepartments.ts"
   },
   "keywords": [
     "support-ticket",

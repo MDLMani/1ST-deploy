@@ -12,6 +12,12 @@ export interface IUser extends Document {
   phone?: string;
   jobTitle?: string;
   company?: string;
+  district?: string;
+  taluk?: string;
+  city?: string;
+  partyRole?: string;
+  party?: string;
+  departmentRole?: string;
   accessLevel?: AccessLevel;
   reportingManager?: Types.ObjectId;
   additionalInformation?: string;
@@ -64,6 +70,12 @@ const userSchema = new Schema<IUser>(
     phone: { type: String, trim: true, maxlength: 30 },
     jobTitle: { type: String, trim: true, maxlength: 120 },
     company: { type: String, trim: true, maxlength: 120 },
+    district: { type: String, trim: true, maxlength: 80 },
+    taluk: { type: String, trim: true, maxlength: 80 },
+    city: { type: String, trim: true, maxlength: 120 },
+    partyRole: { type: String, trim: true, maxlength: 120 },
+    party: { type: String, trim: true, maxlength: 120 },
+    departmentRole: { type: String, trim: true, maxlength: 80 },
     accessLevel: {
       type: String,
       enum: Object.values(AccessLevel),

@@ -16,6 +16,12 @@ export interface IInvitation extends Document {
   jobTitle?: string;
   department?: Types.ObjectId;
   company?: string;
+  district?: string;
+  taluk?: string;
+  city?: string;
+  partyRole?: string;
+  party?: string;
+  departmentRole?: string;
   role: UserRole;
   accessLevel: AccessLevel;
   reportingManager?: Types.ObjectId;
@@ -59,6 +65,12 @@ const invitationSchema = new Schema<IInvitation>(
     jobTitle: { type: String, trim: true, maxlength: 120 },
     department: { type: Schema.Types.ObjectId, ref: 'Department' },
     company: { type: String, trim: true, maxlength: 120 },
+    district: { type: String, trim: true, maxlength: 80 },
+    taluk: { type: String, trim: true, maxlength: 80 },
+    city: { type: String, trim: true, maxlength: 120 },
+    partyRole: { type: String, trim: true, maxlength: 120 },
+    party: { type: String, trim: true, maxlength: 120 },
+    departmentRole: { type: String, trim: true, maxlength: 80 },
     role: {
       type: String,
       enum: Object.values(UserRole),

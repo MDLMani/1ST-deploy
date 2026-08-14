@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   AccessLevel,
+  DEFAULT_PARTY,
+  DepartmentRole,
   UserRole,
   TicketPriority,
   TicketStatus,
@@ -56,7 +58,10 @@ export const createTicketSchema = z.object({
   description: z.string().min(10, 'Description must be at least 10 characters'),
   category: z.string().min(2, 'Category is required'),
   priority: z.nativeEnum(TicketPriority).optional(),
-  department: z.string().optional(),
+  department: z.string().min(1, 'Department is required'),
+  district: z.string().max(80).optional(),
+  taluk: z.string().max(80).optional(),
+  city: z.string().max(120).optional(),
   tags: z.array(z.string()).optional(),
   customFields: z.record(z.string(), z.any()).optional(),
   isInternal: z.boolean().optional(),
@@ -320,14 +325,34 @@ export const inviteUserSchema = z.object({
   email: z.string().email('Invalid email address'),
   phone: z.string().min(7, 'Phone is required').max(30),
   jobTitle: z.string().min(1, 'Job title is required').max(120),
-  department: objectId.optional().or(z.literal('')),
+  department: objectId,
   company: z.string().min(1, 'Company / organization is required').max(120),
+  district: z.string().min(1, 'District is required').max(80),
+  taluk: z.string().min(1, 'Taluk is required').max(80),
+  city: z.string().min(1, 'City / village / town is required').max(120),
+  partyRole: z.string().min(1, 'Party role is required').max(120),
+  party: z.string().min(1, 'Party is required').max(120).default(DEFAULT_PARTY),
+  departmentRole: z.nativeEnum(DepartmentRole, {
+    errorMap: () => ({ message: 'Department role is required' }),
+  }),
   role: z.enum([UserRole.ADMIN, UserRole.SUPPORT_AGENT], {
     errorMap: () => ({ message: 'Role must be admin or support_agent' }),
-  }),
+  }).optional(),
   accessLevel: z.nativeEnum(AccessLevel).optional(),
   reportingManager: objectId.optional().or(z.literal('')),
   additionalInformation: z.string().max(2000).optional(),
+}).superRefine((data, ctx) => {
+  const expectedRole =
+    data.departmentRole === DepartmentRole.DEPARTMENT_ADMIN
+      ? UserRole.ADMIN
+      : UserRole.SUPPORT_AGENT;
+  if (data.role && data.role !== expectedRole) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['role'],
+      message: `Role must be ${expectedRole} for the selected department role`,
+    });
+  }
 });
 
 export const rejectInvitationSchema = z.object({
@@ -347,6 +372,17 @@ export const setUserActiveSchema = z.object({
   isActive: z.boolean(),
 });
 
+export const locationTaluksQuerySchema = z.object({
+  district: z.string().min(1, 'District is required').max(80),
+});
+
+export const locationPlacesQuerySchema = z.object({
+  district: z.string().min(1, 'District is required').max(80),
+  taluk: z.string().min(1, 'Taluk is required').max(80),
+  q: z.string().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
 export const userManagementListQuerySchema = z.object({
   filter: z
     .enum(['all', 'pending_approval', 'overdue', 'approved', 'rejected', 'active', 'inactive'])
@@ -360,3 +396,5 @@ export type KeepPendingInput = z.infer<typeof keepPendingSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
 export type UserManagementListQuery = z.infer<typeof userManagementListQuerySchema>;
+export type LocationTaluksQuery = z.infer<typeof locationTaluksQuerySchema>;
+export type LocationPlacesQuery = z.infer<typeof locationPlacesQuerySchema>;

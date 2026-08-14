@@ -39,16 +39,28 @@ export class TicketService {
       tagIds = [tagIds as unknown as string];
     }
 
-    let departmentId = input.department;
+    let departmentId: string | undefined = input.department;
     if (departmentId && !Types.ObjectId.isValid(departmentId)) {
-      const dept = await departmentRepository.findBySlug(departmentId);
-      departmentId = dept?._id.toString();
+      const deptBySlug = await departmentRepository.findBySlug(departmentId);
+      departmentId = deptBySlug?._id.toString();
+    }
+    if (!departmentId) {
+      throw new ApiError(400, 'Department is required');
+    }
+    const department = await departmentRepository.findById(departmentId);
+    if (!department || !department.isActive) {
+      throw new ApiError(400, 'Department not found');
     }
 
     // Validate custom fields if provided
     if (customFields && Object.keys(customFields).length > 0) {
       await customFieldService.validateCustomFields(departmentId, customFields);
     }
+
+    const creator = await userRepository.findById(userId);
+    const district = input.district?.trim() || creator?.district;
+    const taluk = input.taluk?.trim() || creator?.taluk;
+    const city = input.city?.trim() || creator?.city;
 
     const ticket = await ticketRepository.create({
       ticketNumber,
@@ -61,7 +73,10 @@ export class TicketService {
       attachments,
       overdue: false,
       reminderCount: 0,
-      department: departmentId ? new Types.ObjectId(departmentId) : undefined,
+      department: new Types.ObjectId(departmentId),
+      district,
+      taluk,
+      city,
       tags: tagIds ? tagIds.map((id) => new Types.ObjectId(id)) : [],
       customFields: customFields ? new Map(Object.entries(customFields)) : new Map(),
       isInternal: input.isInternal ?? false,
@@ -70,19 +85,16 @@ export class TicketService {
     // Start SLA
     await slaService.startSLA(ticket._id.toString());
 
-    // Auto-assign if department has matching rules
-    const deptId = ticket.department?.toString();
-    if (deptId) {
-      try {
-        await assignmentService.autoAssignTicket(
-          ticket._id.toString(),
-          deptId,
-          input.category,
-          ticket.priority
-        );
-      } catch {
-        // Ignore auto-assignment errors
-      }
+    // Auto-assign by department + location (best available staff match)
+    try {
+      await assignmentService.autoAssignTicket(
+        ticket._id.toString(),
+        departmentId,
+        input.category,
+        ticket.priority
+      );
+    } catch {
+      // Ignore auto-assignment errors — ticket remains unassigned
     }
 
     // Increment tag usage

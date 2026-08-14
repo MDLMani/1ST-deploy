@@ -9,8 +9,14 @@ import {
   ASSIGNABLE_STAFF_ROLES,
   AuditAction,
   DEFAULT_ORGANIZATION_ID,
+  DEFAULT_PARTY,
+  DEPARTMENT_ROLE_LABELS,
+  DepartmentRole,
+  departmentRoleToUserRole,
   INVITATION_EXPIRY_DAYS,
   InvitationStatus,
+  PARTY_ROLES,
+  TAMIL_NADU_DISTRICTS,
   UserRole,
 } from '../constants';
 import { IInvitation } from '../models/Invitation.model';
@@ -31,6 +37,7 @@ import {
   UserManagementListQuery,
 } from '../validators';
 import { IJwtPayload } from '../interfaces';
+import { locationService } from './location.service';
 
 const SALT_ROUNDS = 12;
 
@@ -49,6 +56,12 @@ export type ManagedUserDto = {
   jobTitle?: string;
   department?: { id: string; name: string };
   company?: string;
+  district?: string;
+  taluk?: string;
+  city?: string;
+  partyRole?: string;
+  party?: string;
+  departmentRole?: string;
   role: UserRole;
   accessLevel: AccessLevel;
   reportingManager?: PersonDto;
@@ -199,6 +212,12 @@ function staffToManagedUser(user: IUser): ManagedUserDto {
     jobTitle: user.jobTitle,
     department: asDepartment(user.department),
     company: user.company,
+    district: user.district,
+    taluk: user.taluk,
+    city: user.city,
+    partyRole: user.partyRole,
+    party: user.party,
+    departmentRole: user.departmentRole,
     role: user.role,
     accessLevel: user.accessLevel || (user.role === UserRole.ADMIN ? AccessLevel.FULL : AccessLevel.STANDARD),
     reportingManager: asPerson(user.reportingManager),
@@ -228,6 +247,12 @@ function toManagedUser(inv: IInvitation): ManagedUserDto {
     jobTitle: inv.jobTitle,
     department: asDepartment(inv.department),
     company: inv.company,
+    district: inv.district,
+    taluk: inv.taluk,
+    city: inv.city,
+    partyRole: inv.partyRole,
+    party: inv.party,
+    departmentRole: inv.departmentRole,
     role: inv.role,
     accessLevel: inv.accessLevel,
     reportingManager: asPerson(inv.reportingManager),
@@ -358,6 +383,10 @@ export class UserManagementService {
 
   async getPermittedRoles(actor: Actor) {
     const admin = await this.loadActor(actor);
+    const seededDistricts = await locationService
+      .listDistricts()
+      .then((rows) => rows.map((row) => row.name))
+      .catch(() => [] as string[]);
     return {
       organizationId: resolveOrganizationId(admin),
       roles: ASSIGNABLE_STAFF_ROLES.map((role) => ({
@@ -369,6 +398,21 @@ export class UserManagementService {
         value,
         label: value === AccessLevel.FULL ? 'Full' : value === AccessLevel.LIMITED ? 'Limited' : 'Standard',
       })),
+      districts: seededDistricts.length > 0 ? seededDistricts : [...TAMIL_NADU_DISTRICTS],
+      partyRoles: PARTY_ROLES.map((value) => ({
+        value,
+        label: value
+          .split('_')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' '),
+      })),
+      departmentRoles: Object.values(DepartmentRole).map((value) => ({
+        value,
+        label: DEPARTMENT_ROLE_LABELS[value],
+        mapsToRole: departmentRoleToUserRole(value),
+        requiresAdminConfirmation: departmentRoleToUserRole(value) === UserRole.ADMIN,
+      })),
+      defaultParty: DEFAULT_PARTY,
     };
   }
 
@@ -417,7 +461,12 @@ export class UserManagementService {
           row.name.toLowerCase().includes(q) ||
           row.email.toLowerCase().includes(q) ||
           row.role.toLowerCase().includes(q) ||
-          (row.jobTitle ?? '').toLowerCase().includes(q)
+          (row.jobTitle ?? '').toLowerCase().includes(q) ||
+          (row.district ?? '').toLowerCase().includes(q) ||
+          (row.taluk ?? '').toLowerCase().includes(q) ||
+          (row.city ?? '').toLowerCase().includes(q) ||
+          (row.partyRole ?? '').toLowerCase().includes(q) ||
+          (row.party ?? '').toLowerCase().includes(q)
       );
     }
 
@@ -474,8 +523,8 @@ export class UserManagementService {
 
   async invite(actor: Actor, input: InviteUserInput) {
     const admin = await this.loadActor(actor);
-    const orgId = resolveOrganizationId(admin);
-    assertCanAssignRole(actor, input.role);
+    const role = departmentRoleToUserRole(input.departmentRole);
+    assertCanAssignRole(actor, role);
 
     const email = input.email.toLowerCase().trim();
     const existingUser = await userRepository.findByEmail(email);
@@ -483,15 +532,14 @@ export class UserManagementService {
       throw new ApiError(409, 'Email is already registered');
     }
 
+    const orgId = resolveOrganizationId(admin);
     const openInvite = await invitationRepository.findOpenByEmail(orgId, email);
     if (openInvite) {
       throw new ApiError(409, 'An open invitation already exists for this email');
     }
 
-    if (input.department) {
-      const dept = await departmentRepository.findById(input.department);
-      if (!dept) throw new ApiError(400, 'Department not found');
-    }
+    const dept = await departmentRepository.findById(input.department);
+    if (!dept || !dept.isActive) throw new ApiError(400, 'Department not found');
 
     if (input.reportingManager) {
       const manager = await userRepository.findByIdInOrg(input.reportingManager, orgId);
@@ -499,6 +547,8 @@ export class UserManagementService {
         throw new ApiError(400, 'Reporting manager must be a staff member in your organization');
       }
     }
+
+    const posting = await locationService.resolvePosting(input.district, input.taluk, input.city);
 
     const token = generateToken();
     const invitation = await invitationRepository.create({
@@ -508,10 +558,16 @@ export class UserManagementService {
       email,
       phone: input.phone.trim(),
       jobTitle: input.jobTitle.trim(),
-      department: optionalObjectId(input.department),
+      department: new Types.ObjectId(input.department),
       company: input.company.trim(),
-      role: input.role,
-      accessLevel: defaultAccessLevel(input.role, input.accessLevel),
+      district: posting.district,
+      taluk: posting.taluk,
+      city: posting.city,
+      partyRole: input.partyRole.trim(),
+      party: input.party.trim(),
+      departmentRole: input.departmentRole,
+      role,
+      accessLevel: defaultAccessLevel(role, input.accessLevel),
       reportingManager: optionalObjectId(input.reportingManager),
       additionalInformation: input.additionalInformation?.trim(),
       invitationStatus: InvitationStatus.SENT,
@@ -530,7 +586,12 @@ export class UserManagementService {
       targetEmail: email,
       action: AuditAction.INVITATION_CREATED,
       newStatus: InvitationStatus.SENT,
-      metadata: { role: input.role, accessLevel: invitation.accessLevel },
+      metadata: {
+        role,
+        departmentRole: input.departmentRole,
+        department: dept.name,
+        accessLevel: invitation.accessLevel,
+      },
     });
     await this.recordAudit({
       organizationId: orgId,
@@ -539,7 +600,7 @@ export class UserManagementService {
       targetId: String(invitation._id),
       targetEmail: email,
       action: AuditAction.ROLE_ASSIGNED,
-      newStatus: input.role,
+      newStatus: role,
     });
     await this.recordAudit({
       organizationId: orgId,
@@ -851,6 +912,12 @@ export class UserManagementService {
       phone: invitation.phone,
       jobTitle: invitation.jobTitle,
       company: invitation.company,
+      district: invitation.district,
+      taluk: invitation.taluk,
+      city: invitation.city,
+      partyRole: invitation.partyRole,
+      party: invitation.party,
+      departmentRole: invitation.departmentRole,
       accessLevel: invitation.accessLevel,
       reportingManager: managerId as Types.ObjectId | undefined,
       additionalInformation: invitation.additionalInformation,

@@ -13,11 +13,13 @@ import satisfactionRoutes from './satisfaction.routes';
 import slaRoutes from './sla.routes';
 import assignmentRoutes from './assignment.routes';
 import userManagementRoutes from './userManagement.routes';
+import locationRoutes from './location.routes';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
 router.use('/user-management', userManagementRoutes);
+router.use('/locations', locationRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/push', pushRoutes);

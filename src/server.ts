@@ -8,10 +8,18 @@ import { verifySmtpConnection } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
 import { startSLAMonitorJob } from './jobs/slaMonitor.job';
 import { startEscalationProcessorJob } from './jobs/escalationProcessor.job';
+import { locationService } from './services/location.service';
+import { departmentService } from './services/department.service';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  void locationService.ensureSeeded().catch((error) => {
+    logger.error('Tamil Nadu location seed failed', { error });
+  });
+  void departmentService.ensureSeeded().catch((error) => {
+    logger.error('Service department seed failed', { error });
+  });
 
   initWebPush();
   await verifySmtpConnection();

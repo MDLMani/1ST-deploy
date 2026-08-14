@@ -16,6 +16,9 @@ export interface ITicket extends Document {
   reminderCount: number;
   lastReminderAt?: Date;
   department?: Types.ObjectId;
+  district?: string;
+  taluk?: string;
+  city?: string;
   tags: Types.ObjectId[];
   isInternal: boolean;
   mergedInto?: Types.ObjectId;
@@ -107,6 +110,9 @@ const ticketSchema = new Schema<ITicket>(
       type: Schema.Types.ObjectId,
       ref: 'Department',
     },
+    district: { type: String, trim: true, maxlength: 80 },
+    taluk: { type: String, trim: true, maxlength: 80 },
+    city: { type: String, trim: true, maxlength: 120 },
     tags: [{
       type: Schema.Types.ObjectId,
       ref: 'Tag',
@@ -158,6 +164,7 @@ ticketSchema.index({ user: 1, createdAt: -1 });
 ticketSchema.index({ status: 1, priority: 1 });
 ticketSchema.index({ overdue: 1 });
 ticketSchema.index({ department: 1, status: 1 });
+ticketSchema.index({ district: 1, taluk: 1, city: 1 });
 ticketSchema.index({ tags: 1 });
 ticketSchema.index({ 'sla.responseDeadline': 1, 'sla.responseBreached': 1 });
 ticketSchema.index({ 'sla.resolutionDeadline': 1, 'sla.resolutionBreached': 1 });
