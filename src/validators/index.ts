@@ -57,6 +57,7 @@ export const createTicketSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   category: z.string().min(2, 'Category is required'),
+  customCategory: z.string().min(2, 'Custom category must be at least 2 characters').max(120).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
   department: z.string().min(1, 'Department is required'),
   district: z.string().max(80).optional(),
@@ -398,3 +399,11 @@ export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
 export type UserManagementListQuery = z.infer<typeof userManagementListQuerySchema>;
 export type LocationTaluksQuery = z.infer<typeof locationTaluksQuerySchema>;
 export type LocationPlacesQuery = z.infer<typeof locationPlacesQuerySchema>;
+
+export const assistantChatSchema = z.object({
+  message: z.string().max(4000).optional().default(''),
+  locale: z.enum(['en', 'ta']).optional().default('en'),
+  history: z.string().max(20000).optional().default('[]'),
+});
+
+export type AssistantChatInput = z.infer<typeof assistantChatSchema>;

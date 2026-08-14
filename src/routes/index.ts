@@ -14,6 +14,7 @@ import slaRoutes from './sla.routes';
 import assignmentRoutes from './assignment.routes';
 import userManagementRoutes from './userManagement.routes';
 import locationRoutes from './location.routes';
+import assistantRoutes from './assistant.routes';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/escalation-rules', escalationRoutes);
 router.use('/satisfaction', satisfactionRoutes);
 router.use('/sla', slaRoutes);
 router.use('/assignments', assignmentRoutes);
+router.use('/assistant', assistantRoutes);
 
 export default router;

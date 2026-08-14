@@ -8,6 +8,7 @@ export interface ITicket extends Document {
   title: string;
   description: string;
   category: string;
+  customCategory?: string;
   priority: TicketPriority;
   status: TicketStatus;
   attachments: IAttachment[];
@@ -76,6 +77,11 @@ const ticketSchema = new Schema<ITicket>(
       type: String,
       required: [true, 'Category is required'],
       trim: true,
+    },
+    customCategory: {
+      type: String,
+      trim: true,
+      maxlength: 120,
     },
     priority: {
       type: String,

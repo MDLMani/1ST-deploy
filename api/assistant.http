@@ -1,0 +1,28 @@
+### TVK Assistant chat
+
+@baseUrl = http://10.153.168.151:5001
+@apiUrl = {{baseUrl}}/api/v1
+@accessToken = REPLACE_AFTER_LOGIN
+
+### Assistant status
+GET {{apiUrl}}/assistant/status
+Authorization: Bearer {{accessToken}}
+
+### Chat (text)
+POST {{apiUrl}}/assistant/chat
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----TVKBoundary
+
+------TVKBoundary
+Content-Disposition: form-data; name="message"
+
+How do I raise a complaint?
+------TVKBoundary
+Content-Disposition: form-data; name="locale"
+
+en
+------TVKBoundary
+Content-Disposition: form-data; name="history"
+
+[]
+------TVKBoundary--

@@ -7,7 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(5001),
   HOST: z.string().default('0.0.0.0'),
-  LAN_IP: z.string().default('127.0.0.1'),
+  LAN_IP: z.string().default('10.153.168.151'),
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),
@@ -34,6 +34,10 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /** Optional OpenAI-compatible chat (leave empty to use the built-in help assistant). */
+  OPENAI_API_KEY: z.string().optional().default(''),
+  OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -62,6 +66,11 @@ export function canLogOtpWithoutSmtp(): boolean {
 }
 
 export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+
+export function isOpenAiConfigured(): boolean {
+  const key = env.OPENAI_API_KEY.trim();
+  return Boolean(key) && key !== 'your-openai-api-key';
+}
 
 function isLocalDevHostname(hostname: string): boolean {
   return (

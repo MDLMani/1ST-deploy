@@ -42,3 +42,35 @@ export const upload = multer({
 });
 
 export const uploadAttachments = upload.array('attachments', 5);
+
+const ASSISTANT_MIME_TYPES = [
+  ...ALLOWED_MIME_TYPES,
+  'text/plain',
+  'text/markdown',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+const assistantFileFilter = (
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+): void => {
+  if (ASSISTANT_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+    return;
+  }
+  cb(
+    new ApiError(
+      400,
+      'Invalid file type. Allowed: images, PDF, text, and Word documents'
+    ) as unknown as null,
+    false
+  );
+};
+
+export const uploadAssistantFiles = multer({
+  storage,
+  fileFilter: assistantFileFilter,
+  limits: { fileSize: env.MAX_FILE_SIZE },
+}).array('attachments', 5);

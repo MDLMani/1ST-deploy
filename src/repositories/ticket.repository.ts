@@ -22,8 +22,12 @@ export class TicketRepository {
 
   async findById(id: string): Promise<ITicket | null> {
     return Ticket.findById(id)
-      .populate('user', 'name email role')
+      .populate(
+        'user',
+        'name email role phone district taluk city party partyRole createdAt isActive'
+      )
       .populate('assignedTo', 'name email role')
+      .populate('department', 'name slug')
       .exec();
   }
 
@@ -111,8 +115,12 @@ export class TicketRepository {
 
   async updateById(id: string, data: UpdateQuery<ITicket>): Promise<ITicket | null> {
     return Ticket.findByIdAndUpdate(id, data, { new: true })
-      .populate('user', 'name email role')
+      .populate(
+        'user',
+        'name email role phone district taluk city party partyRole createdAt isActive'
+      )
       .populate('assignedTo', 'name email role')
+      .populate('department', 'name slug')
       .exec();
   }
 

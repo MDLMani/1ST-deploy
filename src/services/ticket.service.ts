@@ -68,6 +68,7 @@ export class TicketService {
       title: input.title,
       description: input.description,
       category: input.category,
+      customCategory: input.customCategory?.trim() || undefined,
       priority: input.priority ?? TicketPriority.MEDIUM,
       status: TicketStatus.OPEN,
       attachments,
