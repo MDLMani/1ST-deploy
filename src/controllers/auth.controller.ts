@@ -6,11 +6,24 @@ import { sendSuccess } from '../utils/response';
 import { ApiError } from '../utils/ApiError';
 import { RegisterInput, LoginInput, RefreshTokenInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput } from '../validators';
 
-const toPublicUser = (user: { _id: unknown; name: string; email: string; role: string }) => ({
+const toPublicUser = (user: {
+  _id: unknown;
+  name: string;
+  email: string;
+  role: string;
+  district?: string;
+  taluk?: string;
+  city?: string;
+  phone?: string;
+}) => ({
   id: String(user._id),
   name: user.name,
   email: user.email,
   role: user.role,
+  district: user.district,
+  taluk: user.taluk,
+  city: user.city,
+  phone: user.phone,
 });
 
 export const register = asyncHandler(async (req, res: Response) => {

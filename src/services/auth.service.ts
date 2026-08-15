@@ -19,6 +19,10 @@ type AuthUser = {
   name: string;
   email: string;
   role: UserRole;
+  district?: string;
+  taluk?: string;
+  city?: string;
+  phone?: string;
 };
 
 type AuthResult = {
@@ -41,6 +45,10 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        district: user.district,
+        taluk: user.taluk,
+        city: user.city,
+        phone: user.phone,
       },
       ...tokens,
     };

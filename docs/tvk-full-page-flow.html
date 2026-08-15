@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TVK Full Flow & Page Charts</title>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  </script>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --muted: #5c5c5c;
+      --line: #e2e2de;
+      --accent: #1f4b99;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 20px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    nav a {
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--bg);
+    }
+    nav a:hover { border-color: var(--accent); color: var(--accent); }
+    main { max-width: 980px; margin: 0 auto; padding: 24px 20px 64px; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px 18px 8px;
+      margin-bottom: 18px;
+    }
+    h2 { font-size: 17px; margin: 0 0 8px; }
+    h3 { font-size: 14px; margin: 16px 0 8px; }
+    p, li { font-size: 14px; color: var(--muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 10px 0 16px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--bg); }
+    .mermaid { margin: 12px 0 16px; overflow-x: auto; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button.secondary { background: var(--card); color: var(--text); }
+    @media print {
+      header { position: static; }
+      nav, .actions { display: none; }
+      section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>TVK Full Flow & Page Charts</h1>
+      <p>USER · ADMIN · TVKSSBE — open in browser or use Print / Save as PDF</p>
+    </div>
+    <div class="actions">
+      <button type="button" onclick="window.print()">Print / Save PDF</button>
+      <button type="button" class="secondary" onclick="downloadMarkdown()">Download Markdown</button>
+    </div>
+  </header>
+
+  <main>
+    <nav>
+      <a href="#system">System</a>
+      <a href="#user">USER pages</a>
+      <a href="#admin">ADMIN pages</a>
+      <a href="#ticket">Ticket lifecycle</a>
+    </nav>
+
+    <section id="system">
+      <h2>System overview</h2>
+      <pre class="mermaid">
+flowchart LR
+  USER["USER App\nrole: user"]
+  API["TVKSSBE\n/api/v1"]
+  ADMIN["ADMIN App\nadmin | supportAgent"]
+  DB[(MongoDB)]
+  USER -->|JWT| API
+  ADMIN -->|JWT| API
+  API --> DB
+      </pre>
+      <table>
+        <thead><tr><th>Journey</th><th>USER</th><th>Backend</th><th>ADMIN</th></tr></thead>
+        <tbody>
+          <tr><td>Auth</td><td>Login / Register / Forgot</td><td>JWT + reset OTP</td><td>Staff login / register</td></tr>
+          <tr><td>Raise complaint</td><td>Submit wizard → My complaints</td><td>POST /tickets → OPEN</td><td>Tickets board</td></tr>
+          <tr><td>Track &amp; update</td><td>Live updates + detail</td><td>Comments / status / SLA</td><td>Assign, status, merge</td></tr>
+          <tr><td>Assistant</td><td>FAB chat → draft ticket</td><td>POST /assistant/chat</td><td>FAB staff assistant</td></tr>
+          <tr><td>Ops config</td><td>—</td><td>Departments, SLA, rules</td><td>Operations hub + drawer</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="user">
+      <h2>USER page flow</h2>
+      <p>Shell tabs: Home · Raise · Complaints · Account. Assistant and ticket detail are pushed.</p>
+      <pre class="mermaid">
+flowchart TB
+  splash["Splash /"]
+  login["Login /login"]
+  register["Register /register"]
+  forgot["Forgot /forgot-password"]
+  home["Home tab0"]
+  submit["Raise /submit-ticket"]
+  live["Complaints /live-updates"]
+  account["Account /account"]
+  assistant["Assistant push"]
+  notif["Notifications push"]
+  detail["Ticket detail /tickets/:id"]
+  splash -->|guest| login
+  splash -->|user| home
+  login --> register
+  login --> forgot
+  login --> home
+  register --> home
+  forgot --> login
+  home --> submit
+  home --> live
+  home --> assistant
+  home --> notif
+  home --> account
+  submit -->|raised| live
+  live --> detail
+  live --> submit
+  assistant -->|fromChat| submit
+  assistant --> detail
+  account --> live
+  account --> notif
+  account -->|logout| login
+      </pre>
+      <h3>Raise complaint wizard</h3>
+      <pre class="mermaid">
+flowchart LR
+  gate["Entry gate\nnew / draft"] --> cat[Category]
+  cat --> desc[Describe]
+  desc --> det[Details]
+  det --> rev[Review]
+  rev --> done["Live updates\n?raised=1"]
+      </pre>
+      <table>
+        <thead><tr><th>Path</th><th>Page</th><th>Auth</th></tr></thead>
+        <tbody>
+          <tr><td>/</td><td>Splash</td><td>hydrate</td></tr>
+          <tr><td>/login</td><td>Login</td><td>guest</td></tr>
+          <tr><td>/register</td><td>Register</td><td>guest</td></tr>
+          <tr><td>/forgot-password</td><td>Forgot</td><td>guest</td></tr>
+          <tr><td>/home</td><td>Home</td><td>user</td></tr>
+          <tr><td>/submit-ticket</td><td>Raise</td><td>user</td></tr>
+          <tr><td>/live-updates</td><td>Complaints</td><td>user</td></tr>
+          <tr><td>/tickets/:id</td><td>Detail</td><td>user</td></tr>
+          <tr><td>/account</td><td>Account</td><td>user</td></tr>
+          <tr><td>/assistant</td><td>Assistant</td><td>user</td></tr>
+          <tr><td>/notifications</td><td>Notifications</td><td>user</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="admin">
+      <h2>ADMIN page flow</h2>
+      <p>Shell tabs: Dashboard · Tickets · Operations · More. Ticket detail is outside the shell.</p>
+      <pre class="mermaid">
+flowchart TB
+  splash["Splash /"]
+  login["Login /login"]
+  register["Register /register"]
+  forgot["Forgot /forgot-password"]
+  dash["Dashboard tab0"]
+  tickets["Tickets /tickets"]
+  mgmt["Operations /management"]
+  more["More /more"]
+  detail["Ticket detail no shell"]
+  users["Users /users"]
+  settings["Settings /settings"]
+  notif["Notifications"]
+  assistant["Assistant FAB"]
+  depts["Departments"]
+  sla["SLA / rules"]
+  splash -->|guest| login
+  splash -->|staff| dash
+  login --> register
+  login --> forgot
+  login --> dash
+  register --> dash
+  forgot --> login
+  dash --> tickets
+  dash --> mgmt
+  dash --> more
+  dash --> assistant
+  dash --> notif
+  tickets --> detail
+  mgmt --> depts
+  mgmt --> sla
+  more --> users
+  more --> settings
+  more --> notif
+  notif --> detail
+  settings -->|logout| login
+      </pre>
+      <p>Operations children: Departments · Tags · Knowledge base · Escalation · SLA · Auto-assignment · CSAT</p>
+    </section>
+
+    <section id="ticket">
+      <h2>Ticket lifecycle</h2>
+      <pre class="mermaid">
+flowchart TB
+  create[Create citizen] --> open[OPEN]
+  open -->|assign| progress[IN_PROGRESS]
+  open --> pending[PENDING]
+  progress --> pending
+  pending -->|resume| progress
+  progress --> resolved[RESOLVED]
+  pending --> resolved
+  resolved --> closed[CLOSED]
+  open --> merged[MERGED]
+  progress --> merged
+      </pre>
+      <h3>Citizen path</h3>
+      <ol>
+        <li>Raise wizard or Assistant handoff</li>
+        <li>POST /tickets → OPEN (+ auto-assign try)</li>
+        <li>Track on /live-updates + detail comments</li>
+        <li>Optional CSAT after resolution</li>
+      </ol>
+      <h3>Staff path</h3>
+      <ol>
+        <li>Board / dashboard → ticket detail</li>
+        <li>Assign (admin) forces IN_PROGRESS</li>
+        <li>Status, notes, merge, SLA / escalation</li>
+        <li>Resolve / close; citizen sees update</li>
+      </ol>
+    </section>
+  </main>
+
+  <script>
+    function downloadMarkdown() {
+      const text = document.getElementById("embedded-md").textContent;
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tvk-full-page-flow.md";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+  <script type="text/plain" id="embedded-md"># TVK Full Flow & Page Charts
+
+Generated from USER / ADMIN `go_router` and TVKSSBE `/api/v1`.
+
+## System overview
+
+```mermaid
+flowchart LR
+  USER["USER App\nrole: user"]
+  API["TVKSSBE\n/api/v1"]
+  ADMIN["ADMIN App\nadmin | supportAgent"]
+  DB[(MongoDB)]
+  USER -->|JWT| API
+  ADMIN -->|JWT| API
+  API --> DB
+```
+
+| Journey | USER | Backend | ADMIN |
+|---------|------|---------|-------|
+| Auth | Login / Register / Forgot | JWT + reset OTP | Staff login / register |
+| Raise complaint | Submit wizard → My complaints | POST /tickets → OPEN | Tickets board |
+| Track & update | Live updates + detail | Comments / status / SLA | Assign, status, merge |
+| Assistant | FAB chat → draft ticket | POST /assistant/chat | FAB staff assistant |
+| Ops config | — | Departments, SLA, rules | Operations hub + drawer |
+
+---
+
+## USER page flow
+
+```mermaid
+flowchart TB
+  splash["Splash /"]
+  login["Login /login"]
+  register["Register /register"]
+  forgot["Forgot /forgot-password"]
+  home["Home tab0"]
+  submit["Raise /submit-ticket"]
+  live["Complaints /live-updates"]
+  account["Account /account"]
+  assistant["Assistant push"]
+  notif["Notifications push"]
+  detail["Ticket detail /tickets/:id"]
+
+  splash -->|guest| login
+  splash -->|user| home
+  login --> register
+  login --> forgot
+  login --> home
+  register --> home
+  forgot --> login
+  home --> submit
+  home --> live
+  home --> assistant
+  home --> notif
+  home --> account
+  submit -->|raised| live
+  live --> detail
+  live --> submit
+  assistant -->|fromChat| submit
+  assistant --> detail
+  account --> live
+  account --> notif
+  account -->|logout| login
+```
+
+### Raise complaint wizard
+
+```mermaid
+flowchart LR
+  gate["Entry gate\nnew / draft"] --> cat[Category]
+  cat --> desc[Describe]
+  desc --> det[Details]
+  det --> rev[Review]
+  rev --> done["Live updates\n?raised=1"]
+```
+
+`fromChat=1` skips the entry gate and opens at Describe (`step=1`).
+
+### USER routes
+
+| Path | Page | Auth |
+|------|------|------|
+| `/` | Splash | hydrate |
+| `/login` | Login | guest |
+| `/register` | Register | guest |
+| `/forgot-password` | Forgot | guest |
+| `/home` | Home | user |
+| `/submit-ticket` | Raise | user |
+| `/live-updates` | Complaints | user |
+| `/tickets/:id` | Detail | user |
+| `/account` | Account | user |
+| `/assistant` | Assistant | user |
+| `/notifications` | Notifications | user |
+
+**Shell tabs:** Home · Raise · Complaints · Account
+
+---
+
+## ADMIN page flow
+
+```mermaid
+flowchart TB
+  splash["Splash /"]
+  login["Login /login"]
+  register["Register /register"]
+  forgot["Forgot /forgot-password"]
+  dash["Dashboard tab0"]
+  tickets["Tickets /tickets"]
+  mgmt["Operations /management"]
+  more["More /more"]
+  detail["Ticket detail no shell"]
+  users["Users /users"]
+  settings["Settings /settings"]
+  notif["Notifications"]
+  assistant["Assistant FAB"]
+  depts["Departments"]
+  sla["SLA / rules"]
+
+  splash -->|guest| login
+  splash -->|staff| dash
+  login --> register
+  login --> forgot
+  login --> dash
+  register --> dash
+  forgot --> login
+  dash --> tickets
+  dash --> mgmt
+  dash --> more
+  dash --> assistant
+  dash --> notif
+  tickets --> detail
+  mgmt --> depts
+  mgmt --> sla
+  more --> users
+  more --> settings
+  more --> notif
+  notif --> detail
+  settings -->|logout| login
+```
+
+### Operations children
+
+Departments · Tags · Knowledge base · Escalation · SLA · Auto-assignment · CSAT
+
+### ADMIN routes (selected)
+
+| Path | Notes |
+|------|-------|
+| `/dashboard` | Stats / charts hub |
+| `/tickets` | List + filters |
+| `/tickets?overdue=1` | Overdue filter |
+| `/overdue` | Redirect → overdue query |
+| `/management/*` | Ops CRUD screens |
+| `/tickets/:id` | Standalone detail |
+| `/users` | Invite + status analysis |
+
+**Shell tabs:** Dashboard · Tickets · Operations · More  
+**RBAC:** Router = staff only; Assign UI = admin only
+
+---
+
+## Ticket lifecycle
+
+```mermaid
+flowchart TB
+  create[Create citizen] --> open[OPEN]
+  open -->|assign| progress[IN_PROGRESS]
+  open --> pending[PENDING]
+  progress --> pending
+  pending -->|resume| progress
+  progress --> resolved[RESOLVED]
+  pending --> resolved
+  resolved --> closed[CLOSED]
+  open --> merged[MERGED]
+  progress --> merged
+```
+
+### Citizen path
+1. Raise wizard or Assistant handoff  
+2. `POST /tickets` → OPEN (+ auto-assign try)  
+3. Track on `/live-updates` + detail comments  
+4. Optional CSAT after resolution  
+
+### Staff path
+1. Board / dashboard → ticket detail  
+2. Assign (admin) forces IN_PROGRESS  
+3. Status, notes, merge, SLA / escalation  
+4. Resolve / close; citizen sees update  
+
+### API domains
+
+| Domain | Mount | Consumers |
+|--------|-------|-----------|
+| Auth | `/auth` | USER + ADMIN |
+| Tickets | `/tickets` | USER + ADMIN |
+| Assistant | `/assistant` | USER + ADMIN |
+| Departments | `/departments` | USER read · ADMIN CRUD |
+| User management | `/user-management` | ADMIN |
+| Locations / SLA / rules | ops mounts | ADMIN |
+| Notifications / push | `/notifications` · `/push` | both |
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { env, isOpenAiConfigured } from '../config/env';
+import { env, getChatApiKey, getChatProviderLabel, isOpenAiConfigured } from '../config/env';
 import { SERVICE_DEPARTMENTS, UserRole } from '../constants';
 import { IJwtPayload } from '../interfaces';
 import { logger } from '../utils/logger';
@@ -15,7 +15,7 @@ export interface ChatHistoryItem {
 
 export interface AssistantChatResult {
   reply: string;
-  provider: 'openai' | 'fallback';
+  provider: 'pollinations' | 'groq' | 'openai' | 'fallback';
   attachments: { filename: string; mimeType: string; size: number }[];
 }
 
@@ -26,26 +26,29 @@ type OpenAiContentPart =
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const TEXT_MIME = new Set(['text/plain', 'text/markdown']);
 
-function parseHistory(raw: string): ChatHistoryItem[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (item): item is ChatHistoryItem =>
-          Boolean(item) &&
-          typeof item === 'object' &&
-          (item.role === 'user' || item.role === 'assistant') &&
-          typeof item.content === 'string'
-      )
-      .slice(-12)
-      .map((item) => ({
-        role: item.role,
-        content: item.content.slice(0, 2000),
-      }));
-  } catch {
-    return [];
+function parseHistory(raw: string | ChatHistoryItem[] | unknown): ChatHistoryItem[] {
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter(
+      (item): item is ChatHistoryItem =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        (item.role === 'user' || item.role === 'assistant') &&
+        typeof (item as ChatHistoryItem).content === 'string'
+    )
+    .slice(-12)
+    .map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 2000),
+    }));
 }
 
 async function readAttachmentSummary(files: Express.Multer.File[]): Promise<{
@@ -106,11 +109,14 @@ function systemPrompt(locale: ChatLocale, user: IJwtPayload): string {
     audience,
     language,
     'Help with raising complaints, tracking tickets, departments, notifications, and how the app works.',
-    'Answer only what the user asked. Keep replies to 1-3 short sentences. Do not add extra tips, articles, or steps below the answer unless the user asked for them.',
-    'If the user asks for their last/latest/recent complaint, reply with one short confirmation only — do not list multiple complaints.',
-    'If the user uploaded files, acknowledge them briefly and use any readable text. For images, describe what you can see only if relevant.',
-    'Do not invent ticket IDs, personal data, or claim a complaint was filed unless the user already did that in the app.',
-    'Be concise, practical, and courteous.',
+    'When CONTEXT_TICKETS is provided, use ONLY that data. Report ticket number, status, title, department, and date in 2-4 short sentences. Never invent tickets or IDs.',
+    'When the user wants to raise/create/file a complaint, acknowledge their issue and extract fields from their words. End with a JSON fence exactly like:',
+    '```json\n{"type":"complaint_draft","title":"...","description":"...","departmentHint":"...","priority":"medium"}\n```',
+    'departmentHint should be a short slug hint such as water-supply, electricity, roads, ration, police, other-general.',
+    'priority must be one of: low, medium, high, critical.',
+    'If details are thin, ask one clarifying question but still include a best-effort complaint_draft JSON from what they said.',
+    'Do not invent ticket IDs or claim a complaint was already filed unless CONTEXT says so.',
+    'Be concise, practical, and courteous. Prefer real data over generic help text.',
   ].join(' ');
 }
 
@@ -118,6 +124,7 @@ async function openaiReply(params: {
   locale: ChatLocale;
   user: IJwtPayload;
   message: string;
+  context?: string;
   history: ChatHistoryItem[];
   attachmentNames: string[];
   textSnippets: string[];
@@ -129,6 +136,9 @@ async function openaiReply(params: {
   const url = `${base}/chat/completions`;
 
   const extra: string[] = [];
+  if (params.context?.trim()) {
+    extra.push(`CONTEXT_TICKETS / APP_FACTS:\n${params.context.trim()}`);
+  }
   if (params.attachmentNames.length) {
     extra.push(`Uploaded files:\n${params.attachmentNames.join('\n')}`);
   }
@@ -138,10 +148,21 @@ async function openaiReply(params: {
 
   const userText = [params.message.trim(), ...extra].filter(Boolean).join('\n\n') || '(no text)';
 
-  const userContent: OpenAiContentPart[] = [{ type: 'text', text: userText }];
-  for (const image of params.images.slice(0, 3)) {
-    userContent.push({ type: 'image_url', image_url: { url: image.dataUrl } });
-  }
+  // Free text-only cloud endpoints (Groq / Pollinations) reject vision parts.
+  const baseLower = env.OPENAI_BASE_URL.toLowerCase();
+  const useVision =
+    params.images.length > 0 &&
+    !baseLower.includes('groq.com') &&
+    !baseLower.includes('pollinations.ai');
+  const userContent: string | OpenAiContentPart[] = useVision
+    ? [
+        { type: 'text', text: userText },
+        ...params.images.slice(0, 3).map((image) => ({
+          type: 'image_url' as const,
+          image_url: { url: image.dataUrl },
+        })),
+      ]
+    : userText;
 
   const messages: Array<{ role: string; content: string | OpenAiContentPart[] }> = [
     { role: 'system', content: systemPrompt(params.locale, params.user) },
@@ -149,20 +170,26 @@ async function openaiReply(params: {
     { role: 'user', content: userContent },
   ];
 
+  const apiKey = getChatApiKey();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  // Pollinations anonymous tier fails with 402 if a zero-budget Bearer key is sent.
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: env.OPENAI_MODEL,
         temperature: 0.4,
-        max_tokens: 700,
+        max_tokens: 900,
         messages,
       }),
       signal: controller.signal,
@@ -301,7 +328,8 @@ export class AssistantService {
     user: IJwtPayload;
     message: string;
     locale: ChatLocale;
-    historyRaw: string;
+    historyRaw: string | ChatHistoryItem[] | unknown;
+    context?: string;
     files: Express.Multer.File[];
   }): Promise<AssistantChatResult> {
     const locale: ChatLocale = params.locale === 'ta' ? 'ta' : 'en';
@@ -334,6 +362,7 @@ export class AssistantService {
         locale,
         user: params.user,
         message: params.message,
+        context: params.context,
         history,
         attachmentNames: names,
         textSnippets: [
@@ -344,7 +373,7 @@ export class AssistantService {
       });
 
       if (ai) {
-        return { reply: ai, provider: 'openai', attachments };
+        return { reply: ai, provider: getChatProviderLabel(), attachments };
       }
 
       return {

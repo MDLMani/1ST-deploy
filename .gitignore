@@ -6,3 +6,6 @@ logs/
 *.log
 .DS_Store
 coverage/
+
+# Local deploy secrets
+env.deploy.*

@@ -4,7 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import { ApiError } from '../utils/ApiError';
 import { AssistantChatInput } from '../validators';
-import { isOpenAiConfigured } from '../config/env';
+import { getChatProviderLabel, isOpenAiConfigured } from '../config/env';
 
 export const chat = asyncHandler(async (req, res: Response) => {
   const input = req.body as AssistantChatInput;
@@ -19,7 +19,8 @@ export const chat = asyncHandler(async (req, res: Response) => {
     user: req.user!,
     message,
     locale: input.locale ?? 'en',
-    historyRaw: input.history ?? '[]',
+    historyRaw: input.history ?? [],
+    context: (input.context ?? '').trim(),
     files,
   });
 
@@ -27,8 +28,9 @@ export const chat = asyncHandler(async (req, res: Response) => {
 });
 
 export const getAssistantStatus = asyncHandler(async (_req, res: Response) => {
+  const provider = getChatProviderLabel();
   sendSuccess(res, 'Assistant status', {
     aiEnabled: isOpenAiConfigured(),
-    provider: isOpenAiConfigured() ? 'openai' : 'fallback',
+    provider,
   });
 });

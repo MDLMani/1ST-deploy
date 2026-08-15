@@ -34,10 +34,15 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
-  /** Optional OpenAI-compatible chat (leave empty to use the built-in help assistant). */
+  /**
+   * Optional OpenAI-compatible chat.
+   * Default: Groq free cloud OSS models (no card). Set OPENAI_API_KEY or GROQ_API_KEY.
+   * Get a free key in ~1 min: https://console.groq.com/keys
+   */
   OPENAI_API_KEY: z.string().optional().default(''),
-  OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
-  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  GROQ_API_KEY: z.string().optional().default(''),
+  OPENAI_BASE_URL: z.string().default('https://api.groq.com/openai/v1'),
+  OPENAI_MODEL: z.string().default('llama-3.1-8b-instant'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -67,9 +72,30 @@ export function canLogOtpWithoutSmtp(): boolean {
 
 export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
 
+/** Resolves Groq or OpenAI-compatible API key. */
+export function getChatApiKey(): string {
+  const key = env.OPENAI_API_KEY.trim() || env.GROQ_API_KEY.trim();
+  if (!key || key === 'your-openai-api-key' || key === 'your-groq-api-key') {
+    return '';
+  }
+  return key;
+}
+
+/** Providers that allow anonymous free cloud inference (no key). */
+export function isAnonymousCloudAi(): boolean {
+  return env.OPENAI_BASE_URL.toLowerCase().includes('pollinations.ai');
+}
+
 export function isOpenAiConfigured(): boolean {
-  const key = env.OPENAI_API_KEY.trim();
-  return Boolean(key) && key !== 'your-openai-api-key';
+  return Boolean(getChatApiKey()) || isAnonymousCloudAi();
+}
+
+export function getChatProviderLabel(): 'pollinations' | 'groq' | 'openai' | 'fallback' {
+  if (!isOpenAiConfigured()) return 'fallback';
+  const base = env.OPENAI_BASE_URL.toLowerCase();
+  if (base.includes('pollinations.ai')) return 'pollinations';
+  if (base.includes('groq.com')) return 'groq';
+  return 'openai';
 }
 
 function isLocalDevHostname(hostname: string): boolean {

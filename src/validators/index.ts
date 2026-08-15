@@ -413,10 +413,20 @@ export type UserManagementListQuery = z.infer<typeof userManagementListQuerySche
 export type LocationTaluksQuery = z.infer<typeof locationTaluksQuerySchema>;
 export type LocationPlacesQuery = z.infer<typeof locationPlacesQuerySchema>;
 
+const assistantHistoryItemSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().max(2000),
+});
+
+/** Accepts multipart string `"[]"` or JSON body `[]`. */
 export const assistantChatSchema = z.object({
   message: z.string().max(4000).optional().default(''),
   locale: z.enum(['en', 'ta']).optional().default('en'),
-  history: z.string().max(20000).optional().default('[]'),
+  history: formJson(z.array(assistantHistoryItemSchema).max(12))
+    .optional()
+    .default([]),
+  /** Optional structured facts (tickets, hints) for the model — not shown as user prose. */
+  context: z.string().max(12000).optional().default(''),
 });
 
 export type AssistantChatInput = z.infer<typeof assistantChatSchema>;
