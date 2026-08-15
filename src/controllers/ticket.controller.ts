@@ -77,6 +77,14 @@ export const getTicketStats = asyncHandler(async (_req, res: Response) => {
   sendSuccess(res, 'Dashboard stats retrieved', stats);
 });
 
+export const getTicketTrends = asyncHandler(async (req, res: Response) => {
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  const granularity = req.query.granularity === 'day' ? 'day' : 'month';
+  const data = await ticketService.getTrends(from, to, granularity);
+  sendSuccess(res, 'Ticket trends retrieved', data);
+});
+
 export const getTicketById = asyncHandler(async (req, res: Response) => {
   const ticket = await ticketService.getTicketById(
     getRouteParam(req.params.id),

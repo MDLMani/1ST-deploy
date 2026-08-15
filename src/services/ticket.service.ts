@@ -169,6 +169,61 @@ export class TicketService {
     };
   }
 
+  async getTrends(from?: string, to?: string, granularity: 'day' | 'month' = 'month') {
+    const parseCalendar = (raw: string, endOfDay = false) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+      if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]) - 1;
+        const d = Number(m[3]);
+        return endOfDay
+          ? new Date(y, mo, d, 23, 59, 59, 999)
+          : new Date(y, mo, d, 0, 0, 0, 0);
+      }
+      return new Date(raw);
+    };
+
+    const now = new Date();
+    const start = from
+      ? parseCalendar(from, false)
+      : new Date(now.getFullYear(), now.getMonth() - 4, 1);
+    const end = to ? parseCalendar(to, true) : now;
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new ApiError(400, 'Invalid from/to date');
+    }
+    if (start > end) {
+      throw new ApiError(400, 'from must be before to');
+    }
+    const raw = await ticketRepository.getTrends({ from: start, to: end, granularity });
+    const byKey = new Map(raw.map((p) => [p.name, p.value]));
+    const points: { name: string; value: number }[] = [];
+
+    if (granularity === 'day') {
+      const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      while (cursor <= last) {
+        const name = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        points.push({ name, value: byKey.get(name) ?? 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else {
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+      while (cursor <= last) {
+        const name = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+        points.push({ name, value: byKey.get(name) ?? 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+
+    return {
+      from: start,
+      to: end,
+      granularity,
+      points: points.length > 0 ? points : raw,
+    };
+  }
+
   async getTicketById(ticketId: string, requesterId: string, requesterRole: UserRole) {
     const ticket = await ticketRepository.findById(ticketId);
     if (!ticket) {

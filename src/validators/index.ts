@@ -430,3 +430,81 @@ export const assistantChatSchema = z.object({
 });
 
 export type AssistantChatInput = z.infer<typeof assistantChatSchema>;
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(30).optional(),
+  district: z.string().max(80).optional(),
+  taluk: z.string().max(80).optional(),
+  city: z.string().max(120).optional(),
+  ward: z.string().max(120).optional(),
+  preferredDepartmentId: z.string().max(64).nullable().optional(),
+  identityDefaults: z
+    .object({
+      fullName: z.string().max(120).optional(),
+      fatherName: z.string().max(120).optional(),
+      idType: z.string().max(40).optional(),
+    })
+    .optional(),
+  notificationPrefs: z
+    .object({
+      ticketUpdates: z.boolean().optional(),
+      staffReplies: z.boolean().optional(),
+      overdue: z.boolean().optional(),
+      system: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(6).max(128),
+    confirmPassword: z.string().min(6).max(128).optional(),
+  })
+  .refine(
+    (data) => !data.confirmPassword || data.confirmPassword === data.newPassword,
+    { message: 'Passwords do not match', path: ['confirmPassword'] }
+  );
+
+export const phoneOtpRequestSchema = z.object({
+  phone: z.string().min(8).max(30),
+});
+
+export const phoneOtpVerifySchema = z.object({
+  phone: z.string().min(8).max(30),
+  otp: z.string().length(6).regex(/^\d{6}$/),
+});
+
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1),
+});
+
+export const revokeOthersSchema = z.object({
+  refreshToken: z.string().optional(),
+});
+
+export const savedAddressSchema = z.object({
+  label: z.string().min(1).max(80),
+  street: z.string().max(200).optional(),
+  villageTown: z.string().max(120).optional(),
+  taluk: z.string().max(80).optional(),
+  district: z.string().max(80).optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export const updateAddressSchema = savedAddressSchema.partial();
+
+export const familyMemberSchema = z.object({
+  name: z.string().min(2).max(120),
+  relation: z.string().min(1).max(60),
+  phone: z.string().max(30).optional(),
+  district: z.string().max(80).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const updateFamilyMemberSchema = familyMemberSchema.partial();
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

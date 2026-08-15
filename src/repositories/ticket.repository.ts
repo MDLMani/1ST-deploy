@@ -232,6 +232,51 @@ export class TicketRepository {
     };
   }
 
+  async getTrends(options: {
+    from: Date;
+    to: Date;
+    granularity: 'day' | 'month';
+  }): Promise<{ name: string; value: number }[]> {
+    const { from, to, granularity } = options;
+    // Align buckets with India calendar (same as admin date pickers).
+    const tz = 'Asia/Kolkata';
+    if (granularity === 'day') {
+      const agg = await Ticket.aggregate<{ _id: string; count: number }>([
+        { $match: { createdAt: { $gte: from, $lte: to } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: tz },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]);
+      return agg.map((t) => ({
+        name: t._id,
+        value: t.count,
+      }));
+    }
+
+    const agg = await Ticket.aggregate<{ _id: string; count: number }>([
+      { $match: { createdAt: { $gte: from, $lte: to } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: tz },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+    return agg.map((t) => ({
+      name: t._id,
+      value: t.count,
+    }));
+  }
+
   async findByDepartment(departmentId: string, options: TicketQueryOptions = {}): Promise<{ tickets: ITicket[]; total: number }> {
     const page = options.page ?? 1;
     const limit = options.limit ?? 10;

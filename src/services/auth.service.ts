@@ -93,7 +93,7 @@ export class AuthService {
       throw new ApiError(401, 'Invalid email or password');
     }
 
-    if (user.isActive === false) {
+    if (user.isActive === false || user.deletedAt) {
       throw new ApiError(403, 'Account is inactive. Ask an admin to approve or reactivate it.');
     }
 

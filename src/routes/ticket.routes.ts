@@ -4,6 +4,7 @@ import {
   getMyTickets,
   getAllTickets,
   getTicketStats,
+  getTicketTrends,
   getTicketById,
   updateStatus,
   assignTicket,
@@ -101,6 +102,7 @@ router.get('/all', staffOnly, validate(paginationSchema, 'query'), getAllTickets
  *         description: Aggregated ticket metrics
  */
 router.get('/stats', staffOnly, getTicketStats);
+router.get('/trends', staffOnly, getTicketTrends);
 
 /**
  * @swagger
