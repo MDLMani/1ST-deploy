@@ -24,7 +24,12 @@ export const errorHandler = (
   }
 
   if (err.name === 'CastError') {
-    sendError(res, 'Invalid ID format', 400);
+    const castErr = err as Error & { path?: string; value?: unknown };
+    const detail =
+      castErr.path != null
+        ? ` (${castErr.path}: ${String(castErr.value ?? '')})`
+        : '';
+    sendError(res, `Invalid ID format${detail}`, 400);
     return;
   }
 

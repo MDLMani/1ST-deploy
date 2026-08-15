@@ -12,7 +12,7 @@ export class CustomFieldRepository {
 
   async findByDepartment(departmentId?: string): Promise<ICustomField[]> {
     const filter: FilterQuery<ICustomField> = { isActive: true };
-    if (departmentId) {
+    if (departmentId && /^[a-fA-F0-9]{24}$/.test(departmentId)) {
       filter.$or = [{ department: departmentId }, { department: null }];
     } else {
       filter.department = null;

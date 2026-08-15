@@ -106,7 +106,9 @@ function systemPrompt(locale: ChatLocale, user: IJwtPayload): string {
     audience,
     language,
     'Help with raising complaints, tracking tickets, departments, notifications, and how the app works.',
-    'If the user uploaded files, acknowledge them and use any readable text. For images, describe what you can see if relevant.',
+    'Answer only what the user asked. Keep replies to 1-3 short sentences. Do not add extra tips, articles, or steps below the answer unless the user asked for them.',
+    'If the user asks for their last/latest/recent complaint, reply with one short confirmation only — do not list multiple complaints.',
+    'If the user uploaded files, acknowledge them briefly and use any readable text. For images, describe what you can see only if relevant.',
     'Do not invent ticket IDs, personal data, or claim a complaint was filed unless the user already did that in the app.',
     'Be concise, practical, and courteous.',
   ].join(' ');
@@ -221,48 +223,57 @@ function fallbackReply(params: {
   const wantsTicket =
     /ticket|complaint|raise|submit|புகார்|டிக்கெட்|பதிவு/.test(text) ||
     /how (do|can) i (file|raise|create)/.test(text);
+  const wantsLatest =
+    /\b(last|latest|recent|newest|சமீபத்திய|கடைசி)\b/.test(text) ||
+    /(last|latest)\s+comp/.test(text);
   const wantsTrack = /track|status|update|எங்கே|நிலை|பின்தொடர்/.test(text);
   const wantsDept = /department|மின்சாரம்|தண்ணீர்|சாலை|துறை|electricity|water|ration/.test(text);
   const greeting = /^(hi|hello|hey|vanakkam|வணக்கம்)\b/.test(text.trim());
 
-  if (greeting && !wantsTicket && !wantsTrack) {
+  if (greeting && !wantsTicket && !wantsTrack && !wantsLatest) {
     parts.push(
       ta
         ? 'வணக்கம். நான் TVK உதவி உதவியாளர். புகார் பதிவு, நிலை பார்ப்பது, அல்லது துறைகள் பற்றி கேட்கலாம்.'
         : 'Hello. I am the TVK Support assistant. Ask me how to raise a complaint, track status, or which department to choose.'
     );
-  } else if (wantsTicket) {
+  } else if (wantsLatest) {
+    parts.push(
+      ta
+        ? 'உங்கள் சமீபத்திய புகார் கீழே காட்டப்பட்டுள்ளது.'
+        : 'Here is your latest complaint.'
+    );
+  } else if (wantsTicket && !wantsTrack) {
     parts.push(
       params.user.role === UserRole.USER
         ? ta
-          ? 'புகார் பதிவு செய்ய Home அல்லது Raise தாவலுக்குச் சென்று துறை, இடம் மற்றும் விவரத்தை நிரப்பவும். தேவைப்பட்டால் படம் அல்லது ஆவணத்தை இணைக்கவும்.'
-          : 'To raise a complaint, open the Raise tab, choose a department and location, describe the issue, then submit. You can attach photos or documents on that form.'
+          ? 'புகார் பதிவு செய்ய Raise தாவலுக்குச் சென்று துறை, இடம் மற்றும் விவரத்தை நிரப்பவும்.'
+          : 'Open the Raise tab, choose a department and location, describe the issue, then submit.'
         : ta
-          ? 'குடிமக்கள் Raise திரையில் புகார் பதிவு செய்கிறார்கள். ஊழியர்கள் Tickets பக்கத்தில் பார்க்கவும், ஒதுக்கவும், நிலையை மாற்றவும் முடியும்.'
-          : 'Citizens file complaints from the Raise screen. Staff can view, assign, and update them from Tickets.'
+          ? 'குடிமக்கள் Raise திரையில் புகார் பதிவு செய்கிறார்கள். ஊழியர்கள் Tickets பக்கத்தில் பார்க்கவும்.'
+          : 'Citizens file from Raise. Staff review tickets on the Tickets page.'
     );
   } else if (wantsTrack) {
     parts.push(
       params.user.role === UserRole.USER
         ? ta
-          ? 'உங்கள் புகார்களை My Complaints (Live Updates) திரையில் பார்க்கலாம். ஒரு புகாரைத் திறந்து கருத்துகளையும் நிலையையும் காணலாம்.'
-          : 'Track your complaints on My Complaints. Open a ticket to see status, comments, and attachments.'
+          ? 'சமீபத்திய புகார் நிலை கீழே காட்டப்பட்டுள்ளது. முழு பட்டியலுக்கு My Complaints திரையைத் திறக்கவும்.'
+          : 'Your latest complaint status is shown below. Open My Complaints for the full list.'
         : ta
-          ? 'Tickets பக்கத்தில் வடிகட்டிகள் மூலம் நிலை, தாமதம் மற்றும் துறை வாரியாக பார்க்கலாம்.'
-          : 'Use the Tickets page filters to review status, overdue items, and departments.'
+          ? 'Tickets பக்க வடிகட்டிகளைப் பயன்படுத்தவும்.'
+          : 'Use the Tickets page filters.'
     );
   } else if (wantsDept) {
     const names = SERVICE_DEPARTMENTS.map((d) => d.name).slice(0, 8).join(', ');
     parts.push(
       ta
         ? `முக்கிய துறைகள்: ${names}. பொருந்தாவிட்டால் Other / General தேர்வு செய்யவும்.`
-        : `Common departments include ${names}. If none fit, choose Other / General.`
+        : `Common departments: ${names}. If none fit, choose Other / General.`
     );
   } else if (params.message.trim()) {
     parts.push(
       ta
-        ? 'TVK உதவி மையம் புகார் பதிவு, பின்தொடர்தல் மற்றும் துறை வழிகாட்டலுக்கு உதவும். என்ன செய்ய வேண்டும் என்று சுருக்கமாகச் சொல்லுங்கள்.'
-        : 'I can help with TVK complaints, tracking, and which department to use. Tell me what you need in a sentence or two.'
+        ? 'என்ன வேண்டும் என்று ஒரு வரியில் சொல்லுங்கள்: புகார் நிலை, புதிய புகார், அல்லது துறை.'
+        : 'Tell me in one line: complaint status, raise a complaint, or a department.'
     );
   } else if (!params.attachmentNames.length) {
     parts.push(
@@ -272,7 +283,8 @@ function fallbackReply(params: {
     );
   }
 
-  if (params.articles.length) {
+  // Skip article dumps for direct status/latest answers — keep the reply exact.
+  if (params.articles.length && !wantsLatest && !wantsTrack) {
     const titles = params.articles.map((a) => a.title).join('; ');
     parts.push(
       ta

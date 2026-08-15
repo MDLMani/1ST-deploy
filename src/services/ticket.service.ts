@@ -1,8 +1,10 @@
+import { Types } from 'mongoose';
 import { departmentRepository } from '../repositories/department.repository';
 import { ticketRepository, TicketQueryOptions } from '../repositories/ticket.repository';
 import { userRepository } from '../repositories/user.repository';
 import { tagRepository } from '../repositories/tag.repository';
 import { ApiError } from '../utils/ApiError';
+import { isStrictObjectId, toObjectIds } from '../utils/objectId';
 import { TicketPriority, TicketStatus, UserRole, SOCKET_EVENTS } from '../constants';
 import { IAttachment } from '../interfaces';
 import { CreateTicketInput, UpdateStatusInput, AssignTicketInput } from '../validators';
@@ -13,7 +15,6 @@ import { customFieldService } from './customField.service';
 import { slaService } from './sla.service';
 import { knowledgeBaseService } from './knowledgeBase.service';
 import { assignmentService } from './assignment.service';
-import { Types } from 'mongoose';
 
 export class TicketService {
   private async generateTicketNumber(): Promise<string> {
@@ -22,7 +23,28 @@ export class TicketService {
     return `TVK-${year}-${String(count + 1).padStart(6, '0')}`;
   }
 
+  private async resolveDepartmentId(raw: string | undefined): Promise<string> {
+    const value = raw?.trim();
+    if (!value) {
+      throw new ApiError(400, 'Department is required');
+    }
+
+    if (isStrictObjectId(value)) {
+      const byId = await departmentRepository.findById(value);
+      if (byId?.isActive) return byId._id.toString();
+    }
+
+    const bySlug = await departmentRepository.findBySlug(value.toLowerCase());
+    if (bySlug?.isActive) return bySlug._id.toString();
+
+    throw new ApiError(400, 'Department not found');
+  }
+
   async createTicket(userId: string, input: CreateTicketInput, attachments: IAttachment[] = []) {
+    if (!isStrictObjectId(userId)) {
+      throw new ApiError(401, 'Invalid or expired access token');
+    }
+
     const ticketNumber = await this.generateTicketNumber();
 
     let customFields = input.customFields;
@@ -38,19 +60,9 @@ export class TicketService {
     if (tagIds && !Array.isArray(tagIds)) {
       tagIds = [tagIds as unknown as string];
     }
+    const safeTagIds = (tagIds ?? []).map((id) => String(id).trim()).filter(isStrictObjectId);
 
-    let departmentId: string | undefined = input.department;
-    if (departmentId && !Types.ObjectId.isValid(departmentId)) {
-      const deptBySlug = await departmentRepository.findBySlug(departmentId);
-      departmentId = deptBySlug?._id.toString();
-    }
-    if (!departmentId) {
-      throw new ApiError(400, 'Department is required');
-    }
-    const department = await departmentRepository.findById(departmentId);
-    if (!department || !department.isActive) {
-      throw new ApiError(400, 'Department not found');
-    }
+    const departmentId = await this.resolveDepartmentId(input.department);
 
     // Validate custom fields if provided
     if (customFields && Object.keys(customFields).length > 0) {
@@ -78,7 +90,7 @@ export class TicketService {
       district,
       taluk,
       city,
-      tags: tagIds ? tagIds.map((id) => new Types.ObjectId(id)) : [],
+      tags: toObjectIds(safeTagIds),
       customFields: customFields ? new Map(Object.entries(customFields)) : new Map(),
       isInternal: input.isInternal ?? false,
       identity:
@@ -107,8 +119,8 @@ export class TicketService {
     }
 
     // Increment tag usage
-    if (tagIds && tagIds.length > 0) {
-      await tagRepository.incrementUsage(tagIds);
+    if (safeTagIds.length > 0) {
+      await tagRepository.incrementUsage(safeTagIds);
     }
 
     const populated = await ticketRepository.findById(ticket._id.toString());

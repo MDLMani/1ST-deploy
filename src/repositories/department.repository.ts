@@ -7,7 +7,12 @@ export class DepartmentRepository {
   }
 
   async findById(id: string): Promise<IDepartment | null> {
-    return Department.findById(id).exec();
+    try {
+      return await Department.findById(id).exec();
+    } catch (err) {
+      if ((err as { name?: string }).name === 'CastError') return null;
+      throw err;
+    }
   }
 
   async findBySlug(slug: string): Promise<IDepartment | null> {

@@ -86,9 +86,12 @@ function isLocalDevHostname(hostname: string): boolean {
 export function isAllowedCorsOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   if (corsOrigins.includes(origin) || corsOrigins.includes('*')) return true;
-  if (env.NODE_ENV !== 'development') return false;
   try {
-    return isLocalDevHostname(new URL(origin).hostname);
+    const hostname = new URL(origin).hostname;
+    // Flutter web uses random localhost ports — always allow same-machine origins.
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    if (env.NODE_ENV !== 'development') return false;
+    return isLocalDevHostname(hostname);
   } catch {
     return false;
   }
