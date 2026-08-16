@@ -96,11 +96,19 @@ export async function sendStaffInvitationEmail(
   to: string,
   vars: StaffInvitationTemplateVars
 ): Promise<void> {
+  const invitee = to.toLowerCase().trim();
+  if (!invitee.includes('@')) {
+    throw new ApiError(400, 'Invalid invitee email address');
+  }
+
   const { subject, text, html } = renderStaffInvitationEmail(vars);
 
   if (!isSmtpConfigured()) {
     if (canLogOtpWithoutSmtp()) {
-      logger.warn(`[INVITE] Staff invitation for ${to}: token=${vars.token}`);
+      logger.warn(
+        `[INVITE] SMTP not configured — invitation for invitee ${invitee} logged only. ` +
+          `token=${vars.token}${vars.acceptUrl ? ` url=${vars.acceptUrl}` : ''}`
+      );
       return;
     }
     throw new ApiError(
@@ -110,16 +118,30 @@ export async function sendStaffInvitationEmail(
   }
 
   try {
-    await getTransporter().sendMail({
+    const info = await getTransporter().sendMail({
       from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
-      to,
+      to: invitee,
       subject,
       text,
       html,
+      headers: {
+        'X-TVK-Invitee': invitee,
+      },
     });
-    logger.info(`Staff invitation email accepted by SMTP for ${to}`);
+    logger.info(`Staff invitation email accepted by SMTP for invitee ${invitee}`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+    if (Array.isArray(info.rejected) && info.rejected.length > 0) {
+      throw new ApiError(503, `Invitation email was rejected for ${invitee}`);
+    }
   } catch (error) {
-    logger.error('SMTP sendMail failed for invitation', { email: to, message: formatError(error) });
+    if (error instanceof ApiError) throw error;
+    logger.error('SMTP sendMail failed for invitation', {
+      email: invitee,
+      message: formatError(error),
+    });
     throw new ApiError(503, 'Failed to send invitation email. Please try again later.');
   }
 }

@@ -365,12 +365,18 @@ export class UserManagementService {
   }
 
   private async sendInviteEmail(inv: IInvitation, token: string, inviterName: string): Promise<void> {
+    const inviteeEmail = (inv.email || '').toLowerCase().trim();
+    if (!inviteeEmail || !inviteeEmail.includes('@')) {
+      throw new ApiError(400, 'Invitation is missing a valid invitee email address');
+    }
+
     const acceptBase = env.INVITE_ACCEPT_URL?.trim();
     const acceptUrl = acceptBase
       ? `${acceptBase}${acceptBase.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
       : undefined;
 
-    await sendStaffInvitationEmail(inv.email, {
+    // Always deliver to the invited person's email — never the inviter.
+    await sendStaffInvitationEmail(inviteeEmail, {
       firstName: inv.firstName,
       inviterName,
       roleLabel: roleLabel(inv.role),

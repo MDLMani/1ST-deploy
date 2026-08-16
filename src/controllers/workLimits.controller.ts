@@ -17,6 +17,11 @@ export const getWorkLimitsTimeline = asyncHandler(async (req, res: Response) => 
   sendSuccess(res, 'Work limits timeline retrieved', data);
 });
 
+export const getWorkLimitsTeamTrack = asyncHandler(async (req, res: Response) => {
+  const data = await workLimitsService.getTeamTrack(req.user?.userId);
+  sendSuccess(res, 'Team track retrieved', data);
+});
+
 export const exportWorkLimitsReport = asyncHandler(async (req, res: Response) => {
   const from = typeof req.query.from === 'string' ? req.query.from : undefined;
   const to = typeof req.query.to === 'string' ? req.query.to : undefined;

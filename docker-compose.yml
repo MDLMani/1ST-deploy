@@ -36,6 +36,14 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-llama-3.1-8b-instant}
+      # Invitation + password-reset emails go to the recipient address (invitee / user).
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_LOG_OTP: ${SMTP_LOG_OTP:-false}
+      INVITE_ACCEPT_URL: ${INVITE_ACCEPT_URL:-http://192.168.1.16:5000/api/v1/user-management/invitations/accept}
     volumes:
       - uploads_data:/app/uploads
       - logs_data:/app/logs
