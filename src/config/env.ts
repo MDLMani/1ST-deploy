@@ -50,6 +50,8 @@ const envSchema = z.object({
   TWILIO_FROM_NUMBER: z.string().optional().default(''),
   OTP_TTL_MINUTES: z.coerce.number().default(10),
   OTP_MAX_ATTEMPTS: z.coerce.number().default(5),
+  /** Bearer token required by Vercel cron `/api/cron/overdue`. */
+  CRON_SECRET: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,20 +1,38 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { Request } from 'express';
 import { env } from '../config/env';
 import { ALLOWED_MIME_TYPES } from '../constants';
 import { ApiError } from '../utils/ApiError';
 
-const uploadDir = path.join(process.cwd(), env.UPLOAD_DIR);
+/** Vercel/Lambda filesystem is read-only except `/tmp`. */
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const uploadDir = isServerless
+  ? path.join(os.tmpdir(), 'tvk-uploads')
+  : path.join(process.cwd(), env.UPLOAD_DIR);
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (error) {
+  // Do not crash the whole API if uploads dir cannot be created at import time.
+  console.warn('Upload directory unavailable', { uploadDir, error });
 }
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
+    try {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, uploadDir);
+    }
   },
   filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;

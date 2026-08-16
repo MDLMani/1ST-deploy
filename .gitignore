@@ -9,3 +9,5 @@ coverage/
 
 # Local deploy secrets
 env.deploy.*
+.vercel
+.env*
