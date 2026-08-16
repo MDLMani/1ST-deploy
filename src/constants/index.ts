@@ -231,4 +231,6 @@ export const SOCKET_EVENTS = {
   TICKET_ESCALATED: 'ticketEscalated',
   INTERNAL_NOTE_ADDED: 'internalNoteAdded',
   SATISFACTION_SUBMITTED: 'satisfactionSubmitted',
+  DRAFT_UPDATED: 'draftUpdated',
+  DRAFT_DELETED: 'draftDeleted',
 } as const;

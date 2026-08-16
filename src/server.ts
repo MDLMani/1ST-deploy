@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initSocketIO } from './sockets';
 import { initWebPush } from './services/push.service';
+import { initFirebase } from './services/fcm.service';
 import { verifySmtpConnection } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
 import { startSLAMonitorJob } from './jobs/slaMonitor.job';
@@ -22,6 +23,7 @@ const startServer = async (): Promise<void> => {
   });
 
   initWebPush();
+  initFirebase();
   await verifySmtpConnection();
 
   const httpServer = http.createServer(app);

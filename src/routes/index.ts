@@ -18,6 +18,7 @@ import locationRoutes from './location.routes';
 import assistantRoutes from './assistant.routes';
 import orgSettingsRoutes from './orgSettings.routes';
 import workLimitsRoutes from './workLimits.routes';
+import draftRoutes from './draft.routes';
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use('/assignments', assignmentRoutes);
 router.use('/assistant', assistantRoutes);
 router.use('/org-settings', orgSettingsRoutes);
 router.use('/work-limits', workLimitsRoutes);
+router.use('/drafts', draftRoutes);
 
 export default router;

@@ -43,6 +43,13 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().optional().default(''),
   OPENAI_BASE_URL: z.string().default('https://api.groq.com/openai/v1'),
   OPENAI_MODEL: z.string().default('llama-3.1-8b-instant'),
+  // SMS / OTP settings
+  SMS_PROVIDER: z.string().default('twilio'),
+  TWILIO_ACCOUNT_SID: z.string().optional().default(''),
+  TWILIO_AUTH_TOKEN: z.string().optional().default(''),
+  TWILIO_FROM_NUMBER: z.string().optional().default(''),
+  OTP_TTL_MINUTES: z.coerce.number().default(10),
+  OTP_MAX_ATTEMPTS: z.coerce.number().default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);
