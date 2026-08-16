@@ -35,7 +35,10 @@ export class UserRepository {
   }
 
   async findById(id: string): Promise<IUser | null> {
-    return User.findById(id).exec();
+    return User.findById(id)
+      .populate('department', 'name slug')
+      .populate('reportingManager', 'name email role')
+      .exec();
   }
 
   async findByRole(role: UserRole): Promise<IUser[]> {

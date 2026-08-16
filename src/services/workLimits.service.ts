@@ -1,5 +1,12 @@
+import { Types } from 'mongoose';
 import { Ticket } from '../models/Ticket.model';
-import { TicketStatus } from '../constants';
+import { User } from '../models/User.model';
+import { Invitation } from '../models/Invitation.model';
+import {
+  ASSIGNABLE_STAFF_ROLES,
+  InvitationStatus,
+  TicketStatus,
+} from '../constants';
 import { orgSettingsService } from './orgSettings.service';
 
 type BucketKey = 'quickSolve' | 'inProgress' | 'longPaused' | 'postTimePending' | 'monthly';
@@ -18,6 +25,23 @@ function daysBetween(a: Date, b: Date): number {
   return hoursBetween(a, b) / 24;
 }
 
+function personSummary(u: any) {
+  if (!u) return null;
+  const id = u._id?.toString?.() ?? String(u._id ?? u.id ?? '');
+  const name =
+    u.name ||
+    [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+    u.email ||
+    'Staff';
+  return {
+    id,
+    name,
+    email: u.email ?? undefined,
+    role: u.role ?? undefined,
+    departmentRole: u.departmentRole ?? undefined,
+  };
+}
+
 function ticketSummary(t: any) {
   return {
     id: t._id?.toString?.() ?? String(t._id),
@@ -26,13 +50,7 @@ function ticketSummary(t: any) {
     status: t.status,
     priority: t.priority,
     overdue: !!t.overdue,
-    assignedTo: t.assignedTo
-      ? {
-          id: t.assignedTo._id?.toString?.() ?? String(t.assignedTo._id),
-          name: t.assignedTo.name,
-          role: t.assignedTo.role,
-        }
-      : null,
+    assignedTo: personSummary(t.assignedTo),
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     resolvedAt: t.resolvedAt ?? null,
@@ -42,8 +60,137 @@ function ticketSummary(t: any) {
   };
 }
 
+function ticketsForUser(list: any[], userId: string) {
+  return list.filter((t) => String(t.assignedTo?._id ?? t.assignedTo?.id ?? '') === userId);
+}
+
 export class WorkLimitsService {
-  async getOverview(from?: string, to?: string) {
+  private async resolveTeam(viewerUserId?: string) {
+    if (!viewerUserId || !Types.ObjectId.isValid(viewerUserId)) {
+      return [] as Array<{
+        id: string;
+        name: string;
+        email?: string;
+        role?: string;
+        departmentRole?: string;
+        invitationId?: string;
+        status: 'active' | 'pending';
+        source: 'reporting_manager' | 'invited_by';
+      }>;
+    }
+
+    const oid = new Types.ObjectId(viewerUserId);
+    const [reportees, invites] = await Promise.all([
+      User.find({
+        reportingManager: oid,
+        role: { $in: ASSIGNABLE_STAFF_ROLES },
+        $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+      })
+        .select('name email role departmentRole')
+        .lean(),
+      Invitation.find({
+        $or: [{ invitedBy: oid }, { reportingManager: oid }],
+        invitationStatus: { $in: [InvitationStatus.SENT, InvitationStatus.ACCEPTED] },
+      })
+        .select('firstName lastName email role departmentRole user invitationStatus')
+        .lean(),
+    ]);
+
+    const byId = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        email?: string;
+        role?: string;
+        departmentRole?: string;
+        invitationId?: string;
+        status: 'active' | 'pending';
+        source: 'reporting_manager' | 'invited_by';
+      }
+    >();
+
+    for (const u of reportees) {
+      const id = String(u._id);
+      byId.set(id, {
+        id,
+        name: u.name || u.email || 'Staff',
+        email: u.email,
+        role: u.role,
+        departmentRole: u.departmentRole,
+        status: 'active',
+        source: 'reporting_manager',
+      });
+    }
+
+    for (const inv of invites) {
+      const userId = inv.user ? String(inv.user) : undefined;
+      const invitationId = String(inv._id);
+      const name =
+        [inv.firstName, inv.lastName].filter(Boolean).join(' ').trim() || inv.email || 'Invitee';
+      const status = inv.invitationStatus === InvitationStatus.ACCEPTED && userId ? 'active' : 'pending';
+      const key = userId || `inv:${invitationId}`;
+      if (byId.has(key) && status === 'pending') continue;
+      byId.set(key, {
+        id: userId || invitationId,
+        name,
+        email: inv.email,
+        role: inv.role,
+        departmentRole: inv.departmentRole,
+        invitationId,
+        status,
+        source: 'invited_by',
+      });
+    }
+
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private buildTeamPerformance(
+    team: Awaited<ReturnType<WorkLimitsService['resolveTeam']>>,
+    buckets: {
+      monthly: any[];
+      quickSolve: any[];
+      inProgress: any[];
+      longPaused: any[];
+      postTimePending: any[];
+    }
+  ) {
+    return team.map((member) => {
+      const monthly = member.status === 'active' ? ticketsForUser(buckets.monthly, member.id) : [];
+      const quickSolve = member.status === 'active' ? ticketsForUser(buckets.quickSolve, member.id) : [];
+      const inProgress = member.status === 'active' ? ticketsForUser(buckets.inProgress, member.id) : [];
+      const longPaused = member.status === 'active' ? ticketsForUser(buckets.longPaused, member.id) : [];
+      const postTimePending =
+        member.status === 'active' ? ticketsForUser(buckets.postTimePending, member.id) : [];
+
+      const recent = [...monthly, ...inProgress, ...longPaused, ...postTimePending, ...quickSolve]
+        .filter((t, i, arr) => arr.findIndex((x) => String(x._id) === String(t._id)) === i)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 6)
+        .map(ticketSummary);
+
+      return {
+        ...member,
+        counts: {
+          monthly: monthly.length,
+          quickSolve: quickSolve.length,
+          inProgress: inProgress.length,
+          longPaused: longPaused.length,
+          postTimePending: postTimePending.length,
+          total:
+            new Set(
+              [...monthly, ...quickSolve, ...inProgress, ...longPaused, ...postTimePending].map((t) =>
+                String(t._id)
+              )
+            ).size,
+        },
+        recentTickets: recent,
+      };
+    });
+  }
+
+  async getOverview(from?: string, to?: string, viewerUserId?: string) {
     const settings = await orgSettingsService.getPublic();
     const { workLimits, monthlyAchievement, chartThresholds } = settings as any;
     const now = new Date();
@@ -53,22 +200,23 @@ export class WorkLimitsService {
 
     const openStatuses = [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.PENDING];
 
-    const [monthlyTickets, openTickets, resolvedInRange] = await Promise.all([
+    const [monthlyTickets, openTickets, resolvedInRange, team] = await Promise.all([
       Ticket.find({ createdAt: { $gte: monthStart, $lte: now } })
-        .populate('assignedTo', 'name role')
+        .populate('assignedTo', 'name email role departmentRole')
         .sort({ createdAt: -1 })
         .lean(),
       Ticket.find({ status: { $in: openStatuses } })
-        .populate('assignedTo', 'name role')
+        .populate('assignedTo', 'name email role departmentRole')
         .sort({ updatedAt: 1 })
         .lean(),
       Ticket.find({
         status: { $in: [TicketStatus.RESOLVED, TicketStatus.CLOSED] },
         resolvedAt: { $gte: rangeFrom, $lte: rangeTo },
       })
-        .populate('assignedTo', 'name role')
+        .populate('assignedTo', 'name email role departmentRole')
         .sort({ resolvedAt: -1 })
         .lean(),
+      this.resolveTeam(viewerUserId),
     ]);
 
     const quickSolve = resolvedInRange.filter((t) => {
@@ -91,12 +239,20 @@ export class WorkLimitsService {
     });
 
     const mapList = (list: any[]) => list.map(ticketSummary);
+    const teamPerformance = this.buildTeamPerformance(team, {
+      monthly: monthlyTickets,
+      quickSolve,
+      inProgress,
+      longPaused,
+      postTimePending,
+    });
 
     return {
       settings: workLimits,
       chartThresholds,
       monthlyAchievement,
       range: { from: rangeFrom, to: rangeTo },
+      teamPerformance,
       sections: {
         monthly: {
           limit: workLimits.monthlyTicketLimit,
@@ -134,8 +290,8 @@ export class WorkLimitsService {
     };
   }
 
-  async getTimeline(from?: string, to?: string) {
-    const overview = await this.getOverview(from, to);
+  async getTimeline(from?: string, to?: string, viewerUserId?: string) {
+    const overview = await this.getOverview(from, to, viewerUserId);
     const rangeFrom = new Date(overview.range.from);
     const rangeTo = new Date(overview.range.to);
 
@@ -146,16 +302,14 @@ export class WorkLimitsService {
         { resolvedAt: { $gte: rangeFrom, $lte: rangeTo } },
       ],
     })
-      .populate('assignedTo', 'name role')
+      .populate('assignedTo', 'name email role departmentRole')
       .sort({ updatedAt: -1 })
       .limit(200)
       .lean();
 
     const events = tickets.flatMap((t) => {
       const base = ticketSummary(t);
-      const list: Array<Record<string, unknown>> = [
-        { type: 'created', at: t.createdAt, ticket: base },
-      ];
+      const list: Array<Record<string, unknown>> = [{ type: 'created', at: t.createdAt, ticket: base }];
       if (t.firstResponseAt) {
         list.push({ type: 'first_response', at: t.firstResponseAt, ticket: base });
       }
@@ -172,15 +326,30 @@ export class WorkLimitsService {
       range: overview.range,
       events,
       sections: overview.sections,
+      teamPerformance: overview.teamPerformance,
     };
   }
 
-  async exportCsv(section: string | undefined, from?: string, to?: string): Promise<string> {
-    const overview = await this.getOverview(from, to);
-    const key = (section || 'full') as BucketKey | 'full' | 'history';
+  async exportCsv(section: string | undefined, from?: string, to?: string, viewerUserId?: string): Promise<string> {
+    const overview = await this.getOverview(from, to, viewerUserId);
+    const key = (section || 'full') as BucketKey | 'full' | 'history' | 'team';
 
     const rows: string[][] = [
-      ['section', 'ticketNumber', 'title', 'status', 'priority', 'overdue', 'assignee', 'createdAt', 'updatedAt', 'resolvedAt', 'ageHours', 'idleDays'],
+      [
+        'section',
+        'ticketNumber',
+        'title',
+        'status',
+        'priority',
+        'overdue',
+        'assignee',
+        'assigneeId',
+        'createdAt',
+        'updatedAt',
+        'resolvedAt',
+        'ageHours',
+        'idleDays',
+      ],
     ];
 
     const pushTickets = (sectionName: string, tickets: any[]) => {
@@ -193,6 +362,7 @@ export class WorkLimitsService {
           t.priority ?? '',
           t.overdue ? 'yes' : 'no',
           t.assignedTo?.name ?? '',
+          t.assignedTo?.id ?? '',
           t.createdAt ? new Date(t.createdAt).toISOString() : '',
           t.updatedAt ? new Date(t.updatedAt).toISOString() : '',
           t.resolvedAt ? new Date(t.resolvedAt).toISOString() : '',
@@ -202,7 +372,25 @@ export class WorkLimitsService {
       }
     };
 
-    if (key === 'full') {
+    if (key === 'team') {
+      rows.length = 0;
+      rows.push(['name', 'id', 'email', 'role', 'status', 'monthly', 'quickSolve', 'inProgress', 'longPaused', 'postTimePending', 'total']);
+      for (const m of overview.teamPerformance) {
+        rows.push([
+          m.name,
+          m.id,
+          m.email ?? '',
+          m.role ?? '',
+          m.status,
+          String(m.counts.monthly),
+          String(m.counts.quickSolve),
+          String(m.counts.inProgress),
+          String(m.counts.longPaused),
+          String(m.counts.postTimePending),
+          String(m.counts.total),
+        ]);
+      }
+    } else if (key === 'full') {
       pushTickets('monthly', overview.sections.monthly.tickets);
       pushTickets('quickSolve', overview.sections.quickSolve.tickets);
       pushTickets('inProgress', overview.sections.inProgress.tickets);

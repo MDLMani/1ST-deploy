@@ -17,12 +17,29 @@ export type PublicAccount = {
   name: string;
   email: string;
   role: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   phoneVerified?: boolean;
+  jobTitle?: string;
+  company?: string;
   district?: string;
   taluk?: string;
   city?: string;
   ward?: string;
+  party?: string;
+  partyRole?: string;
+  departmentRole?: string;
+  accessLevel?: string;
+  organizationId?: string;
+  isActive?: boolean;
+  maxTicketLoad?: number;
+  skills?: string[];
+  additionalInformation?: string;
+  department?: {
+    id: string;
+    name?: string;
+  } | string;
   preferredDepartmentId?: string;
   identityDefaults?: {
     fullName?: string;
@@ -70,17 +87,45 @@ function defaultNotificationPrefs() {
 export class AccountService {
   toPublicAccount(user: IUser): PublicAccount {
     const prefs = user.notificationPrefs ?? defaultNotificationPrefs();
+    const departmentRaw = user.department as
+      | { _id?: unknown; id?: unknown; name?: string }
+      | string
+      | undefined;
+    let department: PublicAccount['department'];
+    if (departmentRaw && typeof departmentRaw === 'object') {
+      const id = String(departmentRaw._id ?? departmentRaw.id ?? '');
+      if (id) {
+        department = { id, name: departmentRaw.name };
+      }
+    } else if (typeof departmentRaw === 'string' && departmentRaw) {
+      department = departmentRaw;
+    }
+
     return {
       id: String(user._id),
       name: user.name,
       email: user.email,
       role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
       phone: user.phone,
       phoneVerified: Boolean(user.phoneVerified),
+      jobTitle: user.jobTitle,
+      company: user.company,
       district: user.district,
       taluk: user.taluk,
       city: user.city,
       ward: user.ward,
+      party: user.party,
+      partyRole: user.partyRole,
+      departmentRole: user.departmentRole,
+      accessLevel: user.accessLevel,
+      organizationId: user.organizationId,
+      isActive: user.isActive !== false,
+      maxTicketLoad: user.maxTicketLoad,
+      skills: user.skills ?? [],
+      additionalInformation: user.additionalInformation,
+      department,
       preferredDepartmentId: user.preferredDepartmentId,
       identityDefaults: user.identityDefaults
         ? {
