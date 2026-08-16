@@ -5,7 +5,9 @@ import { ApiError } from '../utils/ApiError';
 import {
   renderPasswordResetOtpEmail,
   renderStaffInvitationEmail,
+  renderTicketClosureReceiptEmail,
   StaffInvitationTemplateVars,
+  TicketClosureReceiptTemplateVars,
 } from '../templates/email.templates';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -89,6 +91,54 @@ export async function sendPasswordResetOtp(to: string, otp: string, name: string
       503,
       'Failed to send reset email. Verify SMTP credentials (use a Gmail App Password if using Google).'
     );
+  }
+}
+
+export async function sendTicketClosureReceiptEmail(
+  to: string,
+  vars: TicketClosureReceiptTemplateVars
+): Promise<void> {
+  if (!to || !to.includes('@')) {
+    logger.warn(`Ticket closure receipt skipped for invalid email: ${to}`);
+    return;
+  }
+
+  const { subject, text, html } = renderTicketClosureReceiptEmail(vars);
+
+  if (!isSmtpConfigured()) {
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(`[RECEIPT] SMTP not configured — ticket receipt logged only for ${to}`);
+      logger.info(`[RECEIPT] ${subject} | ${text}`);
+      return;
+    }
+    throw new ApiError(
+      503,
+      'Ticket receipt email is not available. The server administrator must configure SMTP.'
+    );
+  }
+
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
+      to,
+      subject,
+      text,
+      html,
+      headers: {
+        'X-TVK-Ticket-Receipt': vars.ticketNumber,
+      },
+    });
+    logger.info(`Ticket closure receipt email accepted by SMTP for ${to}`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+  } catch (error) {
+    logger.error('SMTP sendMail failed for ticket receipt', {
+      email: to,
+      message: formatError(error),
+    });
+    throw new ApiError(503, 'Failed to send ticket receipt email. Please try again later.');
   }
 }
 

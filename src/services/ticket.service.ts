@@ -15,6 +15,7 @@ import { customFieldService } from './customField.service';
 import { slaService } from './sla.service';
 import { knowledgeBaseService } from './knowledgeBase.service';
 import { assignmentService } from './assignment.service';
+import { sendTicketClosureReceiptEmail } from './email.service';
 
 export class TicketService {
   private async generateTicketNumber(): Promise<string> {
@@ -224,6 +225,79 @@ export class TicketService {
     };
   }
 
+  private async buildTicketClosureReceipt(ticket: any, options: { sendEmail?: boolean } = {}) {
+    const finalStatuses = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
+    if (!finalStatuses.includes(ticket.status)) {
+      return null;
+    }
+
+    const sendEmail = options.sendEmail ?? false;
+
+    const assignee =
+      ticket.assignedTo && typeof ticket.assignedTo === 'object'
+        ? ticket.assignedTo
+        : ticket.assignedTo
+          ? await userRepository.findById(String(ticket.assignedTo))
+          : null;
+
+    const sectionDept =
+      ticket.department && typeof ticket.department === 'object'
+        ? ticket.department
+        : await departmentRepository.findById(String(ticket.department ?? ''));
+
+    let sectionHead: any = null;
+    if (assignee?.reportingManager) {
+      sectionHead =
+        typeof assignee.reportingManager === 'object'
+          ? assignee.reportingManager
+          : await userRepository.findById(String(assignee.reportingManager));
+    }
+
+    if (!sectionHead && assignee?.department) {
+      const departmentAdmins = await userRepository.findAll({
+        department: assignee.department,
+        role: UserRole.ADMIN,
+        isActive: { $ne: false },
+      });
+      sectionHead = departmentAdmins[0] ?? null;
+    }
+
+    if (!sectionHead && sectionDept) {
+      const departmentAdmins = await userRepository.findAll({
+        department: sectionDept._id,
+        role: UserRole.ADMIN,
+        isActive: { $ne: false },
+      });
+      sectionHead = departmentAdmins[0] ?? null;
+    }
+
+    const user =
+      ticket.user && typeof ticket.user === 'object'
+        ? ticket.user
+        : ticket.user
+          ? await userRepository.findById(String(ticket.user))
+          : null;
+
+    const receipt = {
+      ticketNumber: ticket.ticketNumber,
+      title: ticket.title,
+      status: ticket.status,
+      complaintSummary: ticket.description,
+      assignedTo: assignee?.name ?? 'Unassigned',
+      assignedToEmail: assignee?.email,
+      departmentName: sectionDept?.name ?? 'General',
+      sectionHeadName: sectionHead?.name ?? 'Department oversight',
+      sectionHeadEmail: sectionHead?.email,
+      closedAt: (ticket.resolvedAt ?? ticket.updatedAt ?? new Date()).toISOString(),
+    };
+
+    if (sendEmail && user?.email) {
+      await sendTicketClosureReceiptEmail(user.email, receipt);
+    }
+
+    return receipt;
+  }
+
   async getTicketById(ticketId: string, requesterId: string, requesterRole: UserRole) {
     const ticket = await ticketRepository.findById(ticketId);
     if (!ticket) {
@@ -235,6 +309,15 @@ export class TicketService {
 
     if (!isOwner && !isStaff) {
       throw new ApiError(403, 'Access denied');
+    }
+
+    const receipt = await this.buildTicketClosureReceipt(ticket, { sendEmail: false });
+    if (receipt) {
+      (ticket as any).receipt = receipt;
+      (ticket as any).sectionHead = {
+        name: receipt.sectionHeadName,
+        email: receipt.sectionHeadEmail,
+      };
     }
 
     return ticket;
@@ -272,6 +355,22 @@ export class TicketService {
       throw new ApiError(404, 'Ticket not found');
     }
 
+    const shouldSendReceipt =
+      ![TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status) &&
+      [TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(input.status);
+
+    let receipt: Record<string, any> | null = null;
+    if (shouldSendReceipt) {
+      receipt = await this.buildTicketClosureReceipt(updated, { sendEmail: true });
+      if (receipt) {
+        (updated as any).receipt = receipt;
+        (updated as any).sectionHead = {
+          name: receipt.sectionHeadName,
+          email: receipt.sectionHeadEmail,
+        };
+      }
+    }
+
     const io = getSocketIO();
     if (io) {
       io.emit(SOCKET_EVENTS.TICKET_UPDATED, updated);
@@ -294,7 +393,7 @@ export class TicketService {
       updated._id.toString()
     );
 
-    return updated;
+    return receipt ? { ...updated.toObject(), receipt, sectionHead: (updated as any).sectionHead } : updated;
   }
 
   async assignTicket(

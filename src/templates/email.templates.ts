@@ -94,6 +94,125 @@ export interface StaffInvitationTemplateVars {
   expiryDays: number;
 }
 
+export interface TicketClosureReceiptTemplateVars {
+  ticketNumber: string;
+  title: string;
+  status: string;
+  complaintSummary: string;
+  assignedTo: string;
+  assignedToEmail?: string;
+  departmentName: string;
+  sectionHeadName?: string;
+  sectionHeadEmail?: string;
+  closedAt: string;
+}
+
+export function renderTicketClosureReceiptEmail(vars: TicketClosureReceiptTemplateVars) {
+  const subject = `Ticket receipt ${vars.ticketNumber} — ${vars.status}`;
+  const statusLabel = vars.status === 'CLOSED' ? 'Closed' : 'Resolved';
+  const assigned = vars.assignedTo || 'Awaiting assignment';
+  const sectionHead = vars.sectionHeadName || 'Department oversight';
+  const sectionHeader = `Complaint ${statusLabel.toLowerCase()} successfully`;
+
+  const text = [
+    `Hello,`,
+    '',
+    `Here is the closure receipt for ticket ${vars.ticketNumber}.`,
+    '',
+    `Title: ${vars.title}`,
+    `Status: ${vars.status}`,
+    `Department: ${vars.departmentName}`,
+    `Complaint summary: ${vars.complaintSummary}`,
+    `Assigned to: ${assigned}${vars.assignedToEmail ? ` (${vars.assignedToEmail})` : ''}`,
+    `Section head: ${sectionHead}${vars.sectionHeadEmail ? ` (${vars.sectionHeadEmail})` : ''}`,
+    `Closed on: ${new Date(vars.closedAt).toLocaleString()}`,
+    '',
+    'Thank you for using the TVK support system.',
+    '',
+    '— Tamilaga Vettri Kazhagam Support',
+  ].join('\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ticket closure receipt</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7fb;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:22px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,0.08);">
+          <tr>
+            <td style="padding:28px 32px 18px;background:linear-gradient(135deg,#0f766e 0%,#0ea5e9 50%,#f59e0b 110%);">
+              <p style="margin:0;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.85);">TVK Support</p>
+              <h1 style="margin:10px 0 0;font-size:28px;line-height:1.25;color:#ffffff;">${escapeHtml(sectionHeader)}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 8px;">
+              <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#334155;">Hello,</p>
+              <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#475569;">
+                Your complaint ticket <strong style="color:#0f172a;">${escapeHtml(vars.ticketNumber)}</strong> has been ${escapeHtml(statusLabel.toLowerCase())}. Below is the detailed closure summary.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;">
+                <tr>
+                  <td style="padding:18px 18px 12px;">
+                    <p style="margin:0 0 12px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Ticket summary</p>
+                    <p style="margin:0 0 8px;font-size:20px;font-weight:700;color:#0f172a;">${escapeHtml(vars.title)}</p>
+                    <p style="margin:0;color:#475569;line-height:1.7;">${escapeHtml(vars.complaintSummary)}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
+                <tr>
+                  <td style="padding:12px 0;vertical-align:top;width:50%;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Assigned to</p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(assigned)}</p>
+                    <p style="margin:4px 0 0;font-size:13px;color:#475569;">${escapeHtml(vars.assignedToEmail || 'No email provided')}</p>
+                  </td>
+                  <td style="padding:12px 0;vertical-align:top;width:50%;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Section head</p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(sectionHead)}</p>
+                    <p style="margin:4px 0 0;font-size:13px;color:#475569;">${escapeHtml(vars.sectionHeadEmail || 'No contact available')}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding-top:8px;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Department</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(vars.departmentName)}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding-top:14px;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Closed on</p>
+                    <p style="margin:0;font-size:14px;color:#334155;">${escapeHtml(new Date(vars.closedAt).toLocaleString())}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px 26px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#64748b;text-align:center;">
+                Tamilaga Vettri Kazhagam — Support System<br />
+                This document is generated automatically after the complaint is closed.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 export function renderStaffInvitationEmail(vars: StaffInvitationTemplateVars) {
   const subject = `You're invited to join ${vars.organization} support on TVK`;
   const acceptLine = vars.acceptUrl
