@@ -33,7 +33,6 @@ const knowledgeBaseSchema = new Schema<IKnowledgeBase>(
   { timestamps: true }
 );
 
-knowledgeBaseSchema.index({ slug: 1 }, { unique: true });
 knowledgeBaseSchema.index({ category: 1, isPublished: 1 });
 knowledgeBaseSchema.index({ tags: 1 });
 knowledgeBaseSchema.index({ title: 'text', content: 'text' });
