@@ -17,7 +17,17 @@ export enum ApprovalStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+  /** Admin put the request on hold (In Review). */
   KEEP_PENDING = 'keep_pending',
+  /** First approval done — staff must complete invite profile form. */
+  AWAITING_PROFILE = 'awaiting_profile',
+  /** Profile submitted — waiting for final admin approval to unlock app. */
+  PROFILE_SUBMITTED = 'profile_submitted',
+}
+
+export enum InvitationSource {
+  ADMIN_INVITE = 'admin_invite',
+  SELF_SIGNUP = 'self_signup',
 }
 
 export enum AccessLevel {
@@ -43,6 +53,9 @@ export enum AuditAction {
   KEEP_PENDING = 'keep_pending',
   USER_ACTIVATED = 'user_activated',
   USER_DEACTIVATED = 'user_deactivated',
+  PROFILE_AWAITING = 'profile_awaiting',
+  PROFILE_SUBMITTED = 'profile_submitted',
+  SELF_SIGNUP_QUEUED = 'self_signup_queued',
 }
 
 export const DEFAULT_ORGANIZATION_ID = 'tvk';

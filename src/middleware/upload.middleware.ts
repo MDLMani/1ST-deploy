@@ -4,11 +4,12 @@ import fs from 'fs';
 import os from 'os';
 import { Request } from 'express';
 import { env } from '../config/env';
+import { isServerlessRuntime } from '../config/runtime';
 import { ALLOWED_MIME_TYPES } from '../constants';
 import { ApiError } from '../utils/ApiError';
 
 /** Vercel/Lambda filesystem is read-only except `/tmp`. */
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const isServerless = isServerlessRuntime();
 
 const uploadDir = isServerless
   ? path.join(os.tmpdir(), 'tvk-uploads')
@@ -52,6 +53,8 @@ const fileFilter = (
     cb(new ApiError(400, 'Invalid file type. Allowed: images, PDF, text, and Word documents') as unknown as null, false);
   }
 };
+
+export const getUploadDir = (): string => uploadDir;
 
 export const upload = multer({
   storage,

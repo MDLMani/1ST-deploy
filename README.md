@@ -59,7 +59,14 @@ cp .env.example .env
 
 # Development
 npm run dev
+```
 
+Default admin (created on startup):
+
+- **Email:** `tvksuppourt@gmail.com`
+- **Password:** `tvksuppourt`
+
+```bash
 # Production build
 npm run build
 npm start
@@ -73,6 +80,36 @@ docker-compose up -d
 
 API: `http://localhost:5000`  
 Swagger: `http://localhost:5000/api-docs`
+
+## Deploy (Vercel)
+
+Release apps already call `https://tvkssbe.vercel.app/api/v1`. Socket.IO is not available on Vercel serverless.
+
+1. Create an Atlas database (do not use `MONGODB_URI=memory`).
+2. Seed locations once against Atlas: `MONGODB_URI="mongodb+srv://..." npm run seed:tn-locations`
+3. In the Vercel project, set at least:
+
+```
+NODE_ENV=production
+MONGODB_URI=
+JWT_ACCESS_SECRET=
+JWT_REFRESH_SECRET=
+CRON_SECRET=
+CORS_ORIGIN=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=
+INVITE_ACCEPT_URL=https://tvkssbe.vercel.app/api/v1/user-management/invitations/accept
+SWAGGER_SERVER_URL=https://tvkssbe.vercel.app
+```
+
+JWT secrets must not be the `.env.example` placeholders. `CRON_SECRET` is required for the daily overdue / SLA / escalation job.
+
+Ticket photo uploads on Vercel are stored in `/tmp` and do not persist across instances. Use a long-running host (Docker / VPS) if attachments must be durable.
+
+4. Deploy from this repo (`vercel --prod` or Git integration).
 
 ## API Endpoints
 

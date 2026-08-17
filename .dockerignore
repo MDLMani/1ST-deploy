@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.vercel
+.env
+.env.*
+env.deploy.*
+logs
+uploads
+coverage
+*.log
+.mimocode
+api/*.http
+api/fixtures

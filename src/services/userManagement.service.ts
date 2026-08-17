@@ -14,6 +14,7 @@ import {
   DepartmentRole,
   departmentRoleToUserRole,
   INVITATION_EXPIRY_DAYS,
+  InvitationSource,
   InvitationStatus,
   PARTY_ROLES,
   TAMIL_NADU_DISTRICTS,
@@ -31,6 +32,7 @@ import { logger } from '../utils/logger';
 import { sendStaffInvitationEmail } from './email.service';
 import {
   AcceptInvitationInput,
+  CompleteStaffProfileInput,
   InviteUserInput,
   KeepPendingInput,
   RejectInvitationInput,
@@ -64,6 +66,7 @@ export type ManagedUserDto = {
   departmentRole?: string;
   role: UserRole;
   accessLevel: AccessLevel;
+  source?: string;
   reportingManager?: PersonDto;
   additionalInformation?: string;
   invitationStatus: InvitationStatus;
@@ -143,6 +146,15 @@ function assertCanAssignRole(actor: Actor, role: UserRole): void {
 }
 
 function isApprovalOpen(status: ApprovalStatus): boolean {
+  return (
+    status === ApprovalStatus.PENDING ||
+    status === ApprovalStatus.KEEP_PENDING ||
+    status === ApprovalStatus.AWAITING_PROFILE ||
+    status === ApprovalStatus.PROFILE_SUBMITTED
+  );
+}
+
+function isFirstReviewOpen(status: ApprovalStatus): boolean {
   return status === ApprovalStatus.PENDING || status === ApprovalStatus.KEEP_PENDING;
 }
 
@@ -170,14 +182,35 @@ function pendingMeta(inv: IInvitation): { pendingAction?: string; nextAction?: s
       pendingSince: inv.invitedAt,
     };
   }
-  if (inv.invitationStatus === InvitationStatus.ACCEPTED && isApprovalOpen(inv.approvalStatus)) {
+  if (inv.invitationStatus === InvitationStatus.ACCEPTED && isFirstReviewOpen(inv.approvalStatus)) {
     return {
       pendingAction:
         inv.approvalStatus === ApprovalStatus.KEEP_PENDING
-          ? 'Kept pending — resolution required'
-          : 'Accepted invitation awaiting approval',
-      nextAction: 'Review submitted information and approve or reject',
+          ? 'In Review — held for more information'
+          : inv.source === 'self_signup'
+            ? 'Self-signup awaiting first approval'
+            : 'Accepted invitation awaiting approval',
+      nextAction:
+        inv.approvalStatus === ApprovalStatus.KEEP_PENDING
+          ? 'Remove from In Review by Approving or Rejecting'
+          : inv.source === InvitationSource.SELF_SIGNUP
+            ? 'Approve (then they fill profile), Reject, or place In Review'
+            : 'Approve, Reject, or place In Review',
       pendingSince: inv.acceptedAt || inv.invitedAt,
+    };
+  }
+  if (inv.approvalStatus === ApprovalStatus.AWAITING_PROFILE) {
+    return {
+      pendingAction: 'Approved — waiting for staff to complete profile form',
+      nextAction: 'Wait for profile submission, then give final approval',
+      pendingSince: inv.approvedAt || inv.acceptedAt || inv.invitedAt,
+    };
+  }
+  if (inv.approvalStatus === ApprovalStatus.PROFILE_SUBMITTED) {
+    return {
+      pendingAction: 'Profile submitted — final approval required',
+      nextAction: 'Review profile details and Approve to unlock the app (or Reject)',
+      pendingSince: inv.profileCompletedAt || inv.acceptedAt || inv.invitedAt,
     };
   }
   return {};
@@ -255,6 +288,7 @@ function toManagedUser(inv: IInvitation): ManagedUserDto {
     departmentRole: inv.departmentRole,
     role: inv.role,
     accessLevel: inv.accessLevel,
+    source: inv.source,
     reportingManager: asPerson(inv.reportingManager),
     additionalInformation: inv.additionalInformation,
     invitationStatus: inv.invitationStatus,
@@ -312,7 +346,12 @@ function toAuditDto(event: {
 function matchesFilter(row: ManagedUserDto, filter?: UserManagementListQuery['filter']): boolean {
   switch (filter) {
     case 'pending_approval':
-      return isApprovalOpen(row.approvalStatus);
+      return (
+        row.approvalStatus === ApprovalStatus.PENDING ||
+        row.approvalStatus === ApprovalStatus.KEEP_PENDING ||
+        row.approvalStatus === ApprovalStatus.AWAITING_PROFILE ||
+        row.approvalStatus === ApprovalStatus.PROFILE_SUBMITTED
+      );
     case 'overdue':
       return row.isOverdue;
     case 'approved':
@@ -578,6 +617,7 @@ export class UserManagementService {
       additionalInformation: input.additionalInformation?.trim(),
       invitationStatus: InvitationStatus.SENT,
       approvalStatus: ApprovalStatus.PENDING,
+      source: InvitationSource.ADMIN_INVITE,
       tokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
       invitedBy: new Types.ObjectId(admin._id.toString()),
@@ -696,11 +736,46 @@ export class UserManagementService {
     if (invitation.approvalStatus === ApprovalStatus.REJECTED) {
       throw new ApiError(400, 'Rejected invitations cannot be approved');
     }
+    if (invitation.approvalStatus === ApprovalStatus.AWAITING_PROFILE) {
+      throw new ApiError(400, 'Staff must complete the profile form before final approval');
+    }
     if (requestedRole && requestedRole !== invitation.role) {
       throw new ApiError(400, 'Approved role must match the invitation role');
     }
 
     const previous = invitation.approvalStatus;
+    const isSelfSignup = invitation.source === InvitationSource.SELF_SIGNUP;
+    const needsProfileFirst =
+      isSelfSignup &&
+      !invitation.profileCompletedAt &&
+      isFirstReviewOpen(invitation.approvalStatus);
+
+    // First approve for self-signup: unlock profile form only (app stays locked).
+    if (needsProfileFirst) {
+      const updated = await invitationRepository.updateById(invitationId, {
+        approvalStatus: ApprovalStatus.AWAITING_PROFILE,
+        approvedBy: new Types.ObjectId(admin._id.toString()),
+        approvedAt: new Date(),
+        resolutionNote: undefined,
+      });
+      if (!updated) throw new ApiError(404, 'Invitation not found');
+
+      await this.recordAudit({
+        organizationId: orgId,
+        actor,
+        targetType: 'invitation',
+        targetId: invitationId,
+        targetEmail: invitation.email,
+        action: AuditAction.PROFILE_AWAITING,
+        previousStatus: previous,
+        newStatus: ApprovalStatus.AWAITING_PROFILE,
+        metadata: { role: invitation.role, stage: 'first_approve' },
+      });
+
+      return { user: toManagedUser(updated) };
+    }
+
+    // Final approve (classic invite, or self-signup after profile submit).
     const updates: Record<string, unknown> = {
       approvalStatus: ApprovalStatus.APPROVED,
       approvedBy: new Types.ObjectId(admin._id.toString()),
@@ -717,6 +792,21 @@ export class UserManagementService {
         isActive: true,
         role: invitation.role,
         accessLevel: invitation.accessLevel,
+        firstName: invitation.firstName,
+        lastName: invitation.lastName,
+        name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+        phone: invitation.phone,
+        jobTitle: invitation.jobTitle,
+        company: invitation.company,
+        district: invitation.district,
+        taluk: invitation.taluk,
+        city: invitation.city,
+        partyRole: invitation.partyRole,
+        party: invitation.party,
+        departmentRole: invitation.departmentRole,
+        department: invitation.department,
+        reportingManager: invitation.reportingManager,
+        additionalInformation: invitation.additionalInformation,
       });
       await this.recordAudit({
         organizationId: orgId,
@@ -742,7 +832,7 @@ export class UserManagementService {
       action: AuditAction.APPROVED,
       previousStatus: previous,
       newStatus: ApprovalStatus.APPROVED,
-      metadata: { role: invitation.role },
+      metadata: { role: invitation.role, stage: 'final_approve' },
     });
 
     return { user: toManagedUser(updated) };
@@ -804,6 +894,13 @@ export class UserManagementService {
     if (invitation.approvalStatus === ApprovalStatus.REJECTED) {
       throw new ApiError(400, 'Rejected invitations cannot be kept pending');
     }
+    if (
+      invitation.approvalStatus === ApprovalStatus.AWAITING_PROFILE ||
+      invitation.approvalStatus === ApprovalStatus.PROFILE_SUBMITTED ||
+      invitation.approvalStatus === ApprovalStatus.APPROVED
+    ) {
+      throw new ApiError(400, 'Only first-stage requests can be placed In Review');
+    }
 
     const previous = invitation.approvalStatus;
     const updated = await invitationRepository.updateById(invitationId, {
@@ -826,6 +923,111 @@ export class UserManagementService {
     });
 
     return { user: toManagedUser(updated) };
+  }
+
+  /** Self-signup staff completes the invite form after first admin approval. */
+  async completeStaffProfile(userId: string, input: CompleteStaffProfileInput) {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new ApiError(404, 'User not found');
+    if (!ASSIGNABLE_STAFF_ROLES.includes(user.role)) {
+      throw new ApiError(403, 'Only staff accounts complete this onboarding form');
+    }
+
+    const orgId = user.organizationId || DEFAULT_ORGANIZATION_ID;
+    const invitation = await invitationRepository.findOpenByEmail(orgId, user.email);
+    if (!invitation) throw new ApiError(404, 'No onboarding invitation found');
+    if (invitation.approvalStatus !== ApprovalStatus.AWAITING_PROFILE) {
+      throw new ApiError(400, 'Profile form is not open for this account yet');
+    }
+
+    if (departmentRoleToUserRole(input.departmentRole) !== user.role) {
+      throw new ApiError(400, `Department role must match your account role (${user.role})`);
+    }
+
+    const dept = await departmentRepository.findById(input.department);
+    if (!dept || !dept.isActive) throw new ApiError(400, 'Department not found');
+
+    if (input.reportingManager) {
+      const manager = await userRepository.findByIdInOrg(input.reportingManager, orgId);
+      if (!manager || !ASSIGNABLE_STAFF_ROLES.includes(manager.role)) {
+        throw new ApiError(400, 'Reporting manager must be a staff member in your organization');
+      }
+    }
+
+    const posting = await locationService.resolvePosting(input.district, input.taluk, input.city);
+
+    const updated = await invitationRepository.updateById(String(invitation._id), {
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      phone: input.phone.trim(),
+      jobTitle: input.jobTitle.trim(),
+      department: new Types.ObjectId(input.department),
+      company: input.company.trim(),
+      district: posting.district,
+      taluk: posting.taluk,
+      city: posting.city,
+      partyRole: input.partyRole.trim(),
+      party: input.party.trim(),
+      departmentRole: input.departmentRole,
+      accessLevel: defaultAccessLevel(user.role, input.accessLevel),
+      reportingManager: optionalObjectId(input.reportingManager),
+      additionalInformation: input.additionalInformation?.trim(),
+      approvalStatus: ApprovalStatus.PROFILE_SUBMITTED,
+      profileCompletedAt: new Date(),
+      resolutionNote: undefined,
+    });
+    if (!updated) throw new ApiError(404, 'Invitation not found');
+
+    await userRepository.updateById(userId, {
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      name: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
+      phone: input.phone.trim(),
+      jobTitle: input.jobTitle.trim(),
+      company: input.company.trim(),
+      district: posting.district,
+      taluk: posting.taluk,
+      city: posting.city,
+      partyRole: input.partyRole.trim(),
+      party: input.party.trim(),
+      departmentRole: input.departmentRole,
+      department: new Types.ObjectId(input.department),
+      reportingManager: optionalObjectId(input.reportingManager),
+      additionalInformation: input.additionalInformation?.trim(),
+      accessLevel: defaultAccessLevel(user.role, input.accessLevel),
+      isActive: false,
+    });
+
+    await this.recordAudit({
+      organizationId: orgId,
+      actor: { userId, email: user.email, role: user.role },
+      targetType: 'invitation',
+      targetId: String(invitation._id),
+      targetEmail: invitation.email,
+      action: AuditAction.PROFILE_SUBMITTED,
+      previousStatus: ApprovalStatus.AWAITING_PROFILE,
+      newStatus: ApprovalStatus.PROFILE_SUBMITTED,
+    });
+
+    return { user: toManagedUser(updated) };
+  }
+
+  async getMyOnboarding(userId: string) {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new ApiError(404, 'User not found');
+    const orgId = user.organizationId || DEFAULT_ORGANIZATION_ID;
+    const invitation = await invitationRepository.findOpenByEmail(orgId, user.email);
+    if (!invitation) {
+      return {
+        onboardingStatus: user.isActive === false ? 'awaiting_first_approval' : 'ready',
+        invitation: null,
+      };
+    }
+    let onboardingStatus: string = 'awaiting_first_approval';
+    if (invitation.approvalStatus === ApprovalStatus.AWAITING_PROFILE) onboardingStatus = 'awaiting_profile';
+    else if (invitation.approvalStatus === ApprovalStatus.PROFILE_SUBMITTED) onboardingStatus = 'profile_submitted';
+    else if (invitation.approvalStatus === ApprovalStatus.APPROVED) onboardingStatus = 'ready';
+    return { onboardingStatus, invitation: toManagedUser(invitation) };
   }
 
   async setUserActive(actor: Actor, userId: string, isActive: boolean) {

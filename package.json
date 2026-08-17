@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "vercel-build": "npm run build",
     "seed:tn-locations": "tsx src/scripts/seedTnLocations.ts",
-    "seed:departments": "tsx src/scripts/seedDepartments.ts"
+    "seed:departments": "tsx src/scripts/seedDepartments.ts",
+    "seed:admin": "tsx src/scripts/seedDefaultAdmin.ts"
   },
   "keywords": [
     "support-ticket",

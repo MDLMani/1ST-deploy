@@ -1,12 +1,14 @@
-import fs from 'fs';
-import path from 'path';
 import { buildTnLocationDocs, TnSeedStats } from '../data/tamilnadu/buildTnLocationDocs';
 import { tnLocationRepository, TnLocationRecord } from '../repositories/tnLocation.repository';
 import { normalizePlaceName } from '../utils/csv';
+import { isServerlessRuntime } from '../config/runtime';
 import { ApiError } from '../utils/ApiError';
 import { logger } from '../utils/logger';
+import districtAliases from '../data/tamilnadu/district-aliases.json';
 
 const EXPECTED_MIN_DOCS = 16000;
+const EXPECTED_MIN_PINCODES = 2000;
+const EXPECTED_MIN_POSTAL_PLACES = 500;
 
 type DistrictAliasMap = Record<string, string>;
 
@@ -15,12 +17,7 @@ let seedPromise: Promise<TnSeedStats> | null = null;
 
 function loadAliasMap(): DistrictAliasMap {
   if (aliasMap) return aliasMap;
-  const candidates = [
-    path.resolve(__dirname, '../data/tamilnadu/district-aliases.json'),
-    path.resolve(process.cwd(), 'src/data/tamilnadu/district-aliases.json'),
-  ];
-  const file = candidates.find((p) => fs.existsSync(p));
-  aliasMap = file ? (JSON.parse(fs.readFileSync(file, 'utf8')) as DistrictAliasMap) : {};
+  aliasMap = districtAliases as DistrictAliasMap;
   return aliasMap;
 }
 
@@ -56,7 +53,15 @@ function toPlaceDto(row: TnLocationRecord) {
 export class LocationService {
   async seed(options: { force?: boolean } = {}): Promise<TnSeedStats & { inserted: number }> {
     const existing = await tnLocationRepository.count();
-    if (!options.force && existing >= EXPECTED_MIN_DOCS) {
+    const postalPlaces = existing > 0 ? await tnLocationRepository.countPostalPlaces() : 0;
+    const distinctPins = existing > 0 ? await tnLocationRepository.countDistinctPincodes() : 0;
+    if (
+      !options.force &&
+      (isServerlessRuntime() ||
+        (existing >= EXPECTED_MIN_DOCS &&
+          postalPlaces >= EXPECTED_MIN_POSTAL_PLACES &&
+          distinctPins >= EXPECTED_MIN_PINCODES))
+    ) {
       const counts = await tnLocationRepository.countByKind();
       return {
         districts: counts.district,
@@ -69,6 +74,10 @@ export class LocationService {
         extraUlbPlaces: 0,
         ulbMatched: 0,
         ulbUnmatched: 0,
+        postalOffices: 0,
+        postalMatched: 0,
+        postalInserted: postalPlaces,
+        uniquePincodes: distinctPins,
         inserted: existing,
       };
     }
@@ -107,12 +116,7 @@ export class LocationService {
     const district = await this.requireDistrict(input.district);
     const taluk = await this.requireTaluk(district.nameNormalized, input.taluk, district.name);
     const limit = Math.min(Math.max(input.limit ?? 400, 1), 1000);
-    const rows = await tnLocationRepository.listPlaces({
-      districtNormalized: district.nameNormalized,
-      talukNormalized: taluk.nameNormalized,
-      q: input.q?.trim() || undefined,
-      limit,
-    });
+    const q = input.q?.trim() || undefined;
     const rank: Record<string, number> = {
       city: 0,
       municipality: 1,
@@ -122,6 +126,22 @@ export class LocationService {
       panchayat: 5,
       village: 6,
     };
+
+    const rows =
+      q && /^\d{3,6}$/.test(q)
+        ? await tnLocationRepository.findByPincode({
+            pincodeQuery: q,
+            districtNormalized: district.nameNormalized,
+            talukNormalized: taluk.nameNormalized,
+            limit,
+          })
+        : await tnLocationRepository.listPlaces({
+            districtNormalized: district.nameNormalized,
+            talukNormalized: taluk.nameNormalized,
+            q,
+            limit,
+          });
+
     return [...rows]
       .sort((a, b) => (rank[a.type] ?? 9) - (rank[b.type] ?? 9) || a.name.localeCompare(b.name))
       .map(toPlaceDto);

@@ -3,6 +3,7 @@ import {
   AccessLevel,
   ApprovalStatus,
   DEFAULT_ORGANIZATION_ID,
+  InvitationSource,
   InvitationStatus,
   UserRole,
 } from '../constants';
@@ -26,6 +27,7 @@ export interface IInvitation extends Document {
   accessLevel: AccessLevel;
   reportingManager?: Types.ObjectId;
   additionalInformation?: string;
+  source: InvitationSource;
   invitationStatus: InvitationStatus;
   approvalStatus: ApprovalStatus;
   tokenHash: string;
@@ -36,6 +38,7 @@ export interface IInvitation extends Document {
   acceptedAt?: Date;
   approvedAt?: Date;
   rejectedAt?: Date;
+  profileCompletedAt?: Date;
   rejectionReason?: string;
   resolutionNote?: string;
   user?: Types.ObjectId;
@@ -83,6 +86,12 @@ const invitationSchema = new Schema<IInvitation>(
     },
     reportingManager: { type: Schema.Types.ObjectId, ref: 'User' },
     additionalInformation: { type: String, trim: true, maxlength: 2000 },
+    source: {
+      type: String,
+      enum: Object.values(InvitationSource),
+      default: InvitationSource.ADMIN_INVITE,
+      index: true,
+    },
     invitationStatus: {
       type: String,
       enum: Object.values(InvitationStatus),
@@ -103,6 +112,7 @@ const invitationSchema = new Schema<IInvitation>(
     acceptedAt: { type: Date },
     approvedAt: { type: Date },
     rejectedAt: { type: Date },
+    profileCompletedAt: { type: Date },
     rejectionReason: { type: String, trim: true, maxlength: 1000 },
     resolutionNote: { type: String, trim: true, maxlength: 1000 },
     user: { type: Schema.Types.ObjectId, ref: 'User' },

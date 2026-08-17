@@ -1,10 +1,21 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import { Types } from 'mongoose';
 import { IUser } from '../models/User.model';
 import { userRepository } from '../repositories/user.repository';
+import { invitationRepository } from '../repositories/invitation.repository';
 import { ApiError } from '../utils/ApiError';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
-import { UserRole } from '../constants';
+import {
+  AccessLevel,
+  ApprovalStatus,
+  ASSIGNABLE_STAFF_ROLES,
+  DEFAULT_ORGANIZATION_ID,
+  InvitationSource,
+  InvitationStatus,
+  INVITATION_EXPIRY_DAYS,
+  UserRole,
+} from '../constants';
 import { RegisterInput, LoginInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput } from '../validators';
 import { sendPasswordResetOtp } from './email.service';
 import { env } from '../config/env';
@@ -29,14 +40,27 @@ type AuthResult = {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
+  onboardingStatus?:
+    | 'awaiting_first_approval'
+    | 'awaiting_profile'
+    | 'profile_submitted'
+    | 'ready';
 };
 
 type RegisterResult =
   | (AuthResult & { isExistingUser: false })
   | { isExistingUser: true };
 
+function splitName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/);
+  return { firstName: parts[0] || name, lastName: parts.slice(1).join(' ') || parts[0] || 'Staff' };
+}
+
 export class AuthService {
-  private buildAuthResult(user: IUser): AuthResult {
+  private buildAuthResult(
+    user: IUser,
+    onboardingStatus?: AuthResult['onboardingStatus']
+  ): AuthResult {
     const tokens = generateTokens(user._id.toString(), user.email, user.role);
 
     return {
@@ -51,7 +75,31 @@ export class AuthService {
         phone: user.phone,
       },
       ...tokens,
+      onboardingStatus,
     };
+  }
+
+  private async resolveStaffOnboarding(user: IUser): Promise<AuthResult['onboardingStatus']> {
+    if (!ASSIGNABLE_STAFF_ROLES.includes(user.role)) return 'ready';
+    if (user.isActive !== false) return 'ready';
+
+    const invitation = await invitationRepository.findOpenByEmail(
+      user.organizationId || DEFAULT_ORGANIZATION_ID,
+      user.email
+    );
+    if (!invitation) return 'awaiting_first_approval';
+
+    switch (invitation.approvalStatus) {
+      case ApprovalStatus.AWAITING_PROFILE:
+        return 'awaiting_profile';
+      case ApprovalStatus.PROFILE_SUBMITTED:
+        return 'profile_submitted';
+      case ApprovalStatus.KEEP_PENDING:
+      case ApprovalStatus.PENDING:
+        return 'awaiting_first_approval';
+      default:
+        return 'awaiting_first_approval';
+    }
   }
 
   async register(input: RegisterInput): Promise<RegisterResult> {
@@ -68,18 +116,67 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
 
     const role =
-      input.role && [UserRole.ADMIN, UserRole.SUPPORT_AGENT].includes(input.role)
-        ? input.role
-        : UserRole.USER;
+      input.role && ASSIGNABLE_STAFF_ROLES.includes(input.role) ? input.role : UserRole.USER;
 
+    if (role === UserRole.USER) {
+      const user = await userRepository.create({
+        name: input.name,
+        email: input.email,
+        password: hashedPassword,
+        role,
+        isActive: true,
+      });
+      return { isExistingUser: false, ...this.buildAuthResult(user, 'ready') };
+    }
+
+    const names = splitName(input.name);
     const user = await userRepository.create({
-      name: input.name,
-      email: input.email,
+      name: input.name.trim(),
+      firstName: names.firstName,
+      lastName: names.lastName,
+      email: input.email.toLowerCase().trim(),
       password: hashedPassword,
       role,
+      isActive: false,
+      accessLevel: role === UserRole.ADMIN ? AccessLevel.FULL : AccessLevel.STANDARD,
+      organizationId: DEFAULT_ORGANIZATION_ID,
     });
 
-    return { isExistingUser: false, ...this.buildAuthResult(user) };
+    const openInvite = await invitationRepository.findOpenByEmail(
+      DEFAULT_ORGANIZATION_ID,
+      user.email
+    );
+    if (openInvite) {
+      throw new ApiError(409, 'A staff invitation or signup request is already pending for this email');
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + INVITATION_EXPIRY_DAYS);
+
+    await invitationRepository.create({
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      firstName: names.firstName,
+      lastName: names.lastName,
+      email: user.email,
+      role,
+      accessLevel: role === UserRole.ADMIN ? AccessLevel.FULL : AccessLevel.STANDARD,
+      source: InvitationSource.SELF_SIGNUP,
+      invitationStatus: InvitationStatus.ACCEPTED,
+      approvalStatus: ApprovalStatus.PENDING,
+      tokenHash,
+      expiresAt,
+      invitedBy: new Types.ObjectId(String(user._id)),
+      invitedAt: new Date(),
+      acceptedAt: new Date(),
+      user: new Types.ObjectId(String(user._id)),
+    });
+
+    return {
+      isExistingUser: false,
+      ...this.buildAuthResult(user, 'awaiting_first_approval'),
+    };
   }
 
   async login(input: LoginInput) {
@@ -93,11 +190,29 @@ export class AuthService {
       throw new ApiError(401, 'Invalid email or password');
     }
 
-    if (user.isActive === false || user.deletedAt) {
+    if (user.deletedAt) {
       throw new ApiError(403, 'Account is inactive. Ask an admin to approve or reactivate it.');
     }
 
-    return this.buildAuthResult(user);
+    const onboardingStatus = await this.resolveStaffOnboarding(user);
+
+    if (user.isActive === false) {
+      if (onboardingStatus === 'awaiting_profile') {
+        return this.buildAuthResult(user, onboardingStatus);
+      }
+      if (onboardingStatus === 'profile_submitted') {
+        throw new ApiError(
+          403,
+          'Profile submitted. Waiting for final admin approval before you can open the app.'
+        );
+      }
+      throw new ApiError(
+        403,
+        'Account is awaiting admin approval. An admin must Approve, Reject, or place it In Review.'
+      );
+    }
+
+    return this.buildAuthResult(user, onboardingStatus);
   }
 
   async refreshToken(refreshToken: string) {

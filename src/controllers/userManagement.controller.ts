@@ -84,7 +84,22 @@ export const keepInvitationPending = asyncHandler(async (req, res: Response) => 
     getRouteParam(req.params.id),
     req.body as KeepPendingInput
   );
-  sendSuccess(res, 'User kept pending', result);
+  sendSuccess(res, 'Invitation kept in review', result);
+});
+
+export const completeStaffProfile = asyncHandler(async (req, res: Response) => {
+  const user = requireUser(req);
+  const result = await userManagementService.completeStaffProfile(
+    user.userId,
+    req.body as import('../validators').CompleteStaffProfileInput
+  );
+  sendSuccess(res, 'Profile submitted for final approval', result);
+});
+
+export const getMyOnboarding = asyncHandler(async (req, res: Response) => {
+  const user = requireUser(req);
+  const result = await userManagementService.getMyOnboarding(user.userId);
+  sendSuccess(res, 'Onboarding status retrieved', result);
 });
 
 export const setManagedUserActive = asyncHandler(async (req, res: Response) => {

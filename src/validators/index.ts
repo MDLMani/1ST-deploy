@@ -369,6 +369,28 @@ export const inviteUserSchema = z.object({
   }
 });
 
+export const completeStaffProfileSchema = z.object({
+  firstName: z.string().min(1, 'First name is required').max(80),
+  lastName: z.string().min(1, 'Last name is required').max(80),
+  phone: z.string().min(7, 'Phone is required').max(30),
+  jobTitle: z.string().min(1, 'Job title is required').max(120),
+  department: objectId,
+  company: z.string().min(1, 'Company / organization is required').max(120),
+  district: z.string().min(1, 'District is required').max(80),
+  taluk: z.string().min(1, 'Taluk is required').max(80),
+  city: z.string().min(1, 'City / village / town is required').max(120),
+  partyRole: z.string().min(1, 'Party role is required').max(120),
+  party: z.string().min(1, 'Party is required').max(120).default(DEFAULT_PARTY),
+  departmentRole: z.nativeEnum(DepartmentRole, {
+    errorMap: () => ({ message: 'Department role is required' }),
+  }),
+  accessLevel: z.nativeEnum(AccessLevel).optional(),
+  reportingManager: objectId.optional().or(z.literal('')),
+  additionalInformation: z.string().max(2000).optional(),
+});
+
+export type CompleteStaffProfileInput = z.infer<typeof completeStaffProfileSchema>;
+
 export const rejectInvitationSchema = z.object({
   reason: z.string().max(1000).optional(),
 });

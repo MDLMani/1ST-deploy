@@ -11,10 +11,12 @@ import { startSLAMonitorJob } from './jobs/slaMonitor.job';
 import { startEscalationProcessorJob } from './jobs/escalationProcessor.job';
 import { locationService } from './services/location.service';
 import { departmentService } from './services/department.service';
+import { ensureDefaultAdmin } from './services/defaultAdmin.service';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  await ensureDefaultAdmin();
   void locationService.ensureSeeded().catch((error) => {
     logger.error('Tamil Nadu location seed failed', { error });
   });

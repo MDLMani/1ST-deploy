@@ -56,5 +56,7 @@ const tnLocationSchema = new Schema<ITnLocation>(
 tnLocationSchema.index({ kind: 1, districtNormalized: 1, nameNormalized: 1 });
 tnLocationSchema.index({ kind: 1, districtNormalized: 1, talukNormalized: 1, nameNormalized: 1 });
 tnLocationSchema.index({ kind: 1, nameNormalized: 1, nameTa: 1 });
+tnLocationSchema.index({ kind: 1, pincode: 1 });
+tnLocationSchema.index({ kind: 1, districtNormalized: 1, pincode: 1 });
 
 export const TnLocation = mongoose.model<ITnLocation>('TnLocation', tnLocationSchema);

@@ -2,8 +2,8 @@
 @baseUrl = http://localhost:5001
 @apiUrl = {{baseUrl}}/api/v1
 
-@adminEmail = admin@tvk.com
-@adminPassword = password123
+@adminEmail = tvksuppourt@gmail.com
+@adminPassword = tvksuppourt
 @agentEmail = agent@tvk.com
 @agentPassword = password123
 @userEmail = user@tvk.com

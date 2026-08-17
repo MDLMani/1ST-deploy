@@ -52,12 +52,29 @@ const envSchema = z.object({
   OTP_MAX_ATTEMPTS: z.coerce.number().default(5),
   /** Bearer token required by Vercel cron `/api/cron/overdue`. */
   CRON_SECRET: z.string().optional().default(''),
+  DEFAULT_ADMIN_EMAIL: z.string().email().default('tvksuppourt@gmail.com'),
+  DEFAULT_ADMIN_PASSWORD: z.string().min(6).default('tvksuppourt'),
+  DEFAULT_ADMIN_NAME: z.string().default('TVK Support'),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+const insecureJwtPattern =
+  /change-in-production|change-this-|your-access-secret|your-refresh-secret/i;
+
+if (
+  parsed.data.NODE_ENV === 'production' &&
+  (insecureJwtPattern.test(parsed.data.JWT_ACCESS_SECRET) ||
+    insecureJwtPattern.test(parsed.data.JWT_REFRESH_SECRET))
+) {
+  console.error(
+    'Invalid environment variables: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be unique production values, not .env.example placeholders'
+  );
   process.exit(1);
 }
 

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { env } from './env';
+import { isServerlessRuntime } from './runtime';
 import { logger } from '../utils/logger';
 
 let memoryServer: { stop: () => Promise<boolean> } | null = null;
@@ -22,12 +23,22 @@ async function resolveMongoUri(): Promise<string> {
 }
 
 export const connectDatabase = async (): Promise<void> => {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
   try {
     const uri = await resolveMongoUri();
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      maxPoolSize: isServerlessRuntime() ? 5 : 10,
+      serverSelectionTimeoutMS: isServerlessRuntime() ? 8000 : 10000,
+    });
     logger.info('MongoDB connected successfully');
   } catch (error) {
     logger.error('MongoDB connection failed', { error });
+    if (isServerlessRuntime()) {
+      throw error;
+    }
     process.exit(1);
   }
 

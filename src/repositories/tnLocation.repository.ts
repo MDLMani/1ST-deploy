@@ -68,9 +68,58 @@ export class TnLocationRepository {
         { name: { $regex: q, $options: 'i' } },
         { nameTa: { $regex: q, $options: 'i' } },
         { nameNormalized: { $regex: normalizePlaceName(input.q), $options: 'i' } },
+        { pincode: { $regex: `^${q}` } },
       ];
     }
     return TnLocation.find(filter).sort({ name: 1 }).limit(input.limit).lean<TnLocationRecord[]>().exec();
+  }
+
+  /** Search places by PIN (exact 6-digit or prefix). Prefer selected taluk, then district, then statewide. */
+  async findByPincode(input: {
+    pincodeQuery: string;
+    districtNormalized?: string;
+    talukNormalized?: string;
+    limit: number;
+  }): Promise<TnLocationRecord[]> {
+    const q = input.pincodeQuery.trim();
+    if (!/^\d{3,6}$/.test(q)) return [];
+
+    const pinFilter =
+      q.length === 6 ? { pincode: q } : { pincode: { $regex: `^${q}` } };
+
+    const run = async (scope: Record<string, unknown>) =>
+      TnLocation.find({ kind: 'place', ...pinFilter, ...scope })
+        .sort({ name: 1 })
+        .limit(input.limit)
+        .lean<TnLocationRecord[]>()
+        .exec();
+
+    if (input.districtNormalized && input.talukNormalized) {
+      const local = await run({
+        districtNormalized: input.districtNormalized,
+        talukNormalized: input.talukNormalized,
+      });
+      if (local.length > 0) return local;
+    }
+
+    if (input.districtNormalized) {
+      const districtRows = await run({ districtNormalized: input.districtNormalized });
+      if (districtRows.length > 0) return districtRows;
+    }
+
+    return run({});
+  }
+
+  async countPostalPlaces(): Promise<number> {
+    return TnLocation.countDocuments({ key: { $regex: '^p:' } }).exec();
+  }
+
+  async countDistinctPincodes(): Promise<number> {
+    const rows = await TnLocation.distinct('pincode', {
+      kind: 'place',
+      pincode: { $exists: true, $nin: [null, ''] },
+    }).exec();
+    return rows.filter((p) => typeof p === 'string' && /^\d{6}$/.test(p)).length;
   }
 
   async findDistrict(nameNormalized: string): Promise<TnLocationRecord | null> {

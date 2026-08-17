@@ -3,15 +3,19 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
-import path from 'path';
 import { env, corsOriginDelegate } from './config/env';
 import { swaggerSpec } from './config/swagger';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { requestLogMiddleware } from './middleware/requestLog.middleware';
+import { getUploadDir } from './middleware/upload.middleware';
 
 const app = express();
 const isDev = env.NODE_ENV === 'development';
+
+if (process.env.VERCEL || env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
@@ -23,6 +27,9 @@ app.use(
 
 // After CORS so Flutter web (Chrome) can probe health during ApiConfig init.
 app.get('/health', (_req, res) => {
+  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
+});
+app.get('/api/v1/health', (_req, res) => {
   res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
 });
 
@@ -57,7 +64,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogMiddleware);
 
-app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
+app.use('/uploads', express.static(getUploadDir()));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

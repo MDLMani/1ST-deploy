@@ -5,8 +5,10 @@ import { validate } from '../middleware/validate.middleware';
 import {
   acceptInvitation,
   approveInvitation,
+  completeStaffProfile,
   getManagedUser,
   getManagers,
+  getMyOnboarding,
   getPermittedRoles,
   inviteUser,
   keepInvitationPending,
@@ -20,6 +22,7 @@ import {
 } from '../controllers/userManagement.controller';
 import {
   acceptInvitationSchema,
+  completeStaffProfileSchema,
   inviteUserSchema,
   keepPendingSchema,
   rejectInvitationSchema,
@@ -49,7 +52,13 @@ router.get('/invitations/verify/:token', verifyInvitation);
  */
 router.post('/invitations/accept', validate(acceptInvitationSchema), acceptInvitation);
 
-router.use(authenticate, adminOnly);
+router.use(authenticate);
+
+/** Staff onboarding (self-signup after first approval) — not admin-only. */
+router.get('/onboarding/me', getMyOnboarding);
+router.post('/onboarding/complete-profile', validate(completeStaffProfileSchema), completeStaffProfile);
+
+router.use(adminOnly);
 
 /**
  * @swagger

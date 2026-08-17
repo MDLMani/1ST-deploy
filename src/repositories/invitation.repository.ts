@@ -30,7 +30,9 @@ export class InvitationRepository {
       organizationId,
       email: email.toLowerCase(),
       invitationStatus: { $in: ['sent', 'accepted'] },
-      approvalStatus: { $ne: 'rejected' },
+      approvalStatus: {
+        $in: ['pending', 'keep_pending', 'awaiting_profile', 'profile_submitted'],
+      },
     }).exec();
   }
 

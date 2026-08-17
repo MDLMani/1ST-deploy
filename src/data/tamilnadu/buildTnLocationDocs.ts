@@ -31,6 +31,10 @@ export type TnSeedStats = {
   extraUlbPlaces: number;
   ulbMatched: number;
   ulbUnmatched: number;
+  postalOffices: number;
+  postalMatched: number;
+  postalInserted: number;
+  uniquePincodes: number;
 };
 
 const TYPE_RANK: Record<TnPlaceType, number> = {
@@ -100,6 +104,22 @@ function pickTaluk(
   const taluks = taluksByDistrict.get(normalizePlaceName(district)) ?? [];
   const hq = taluks.find((t) => t.nameNormalized === normalizePlaceName(district));
   return hq?.name ?? taluks[0]?.name;
+}
+
+function cleanPostalOfficeName(raw: string): string {
+  return raw
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/\b(B\.?\s*O\.?|S\.?\s*O\.?|H\.?\s*O\.?|G\.?\s*P\.?\s*O\.?)\b/gi, ' ')
+    .replace(/\b(BO|SO|HO|GPO)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function postalOfficeType(officeType: string): TnPlaceType {
+  const t = officeType.replace(/\./g, '').toUpperCase().trim();
+  if (t === 'HO' || t === 'GPO') return 'town';
+  if (t === 'SO' || t === 'PO') return 'town';
+  return 'village';
 }
 
 function editDistance(a: string, b: string): number {
@@ -366,6 +386,114 @@ export function buildTnLocationDocs(): { docs: TnLocationDoc[]; stats: TnSeedSta
     attachUlb(corp.name, undefined, corp.type || 'city', undefined, corp.district);
   }
 
+  // India Post directory — every Tamil Nadu pincode / delivery office.
+  const postalCsv = gunzipSync(fs.readFileSync(path.join(dir, 'tamil_nadu_pincodes.csv.gz'))).toString('utf8');
+  const postalRows = parseCsv(postalCsv);
+  const districtNameByNorm = new Map<string, string>();
+  for (const doc of docs.values()) {
+    if (doc.kind === 'district') districtNameByNorm.set(doc.nameNormalized, doc.name);
+  }
+
+  const resolveCanonicalDistrict = (raw: string): string | undefined => {
+    const norm = normalizePlaceName(raw);
+    if (!norm) return undefined;
+    const aliased = aliases[norm] || raw.trim();
+    const aliasedNorm = normalizePlaceName(aliased);
+    return districtNameByNorm.get(aliasedNorm) || districtNameByNorm.get(norm);
+  };
+
+  let postalOffices = 0;
+  let postalMatched = 0;
+  let postalInserted = 0;
+  const pincodeSet = new Set<string>();
+
+  for (const row of postalRows) {
+    const pincode = (row.pincode || '').trim();
+    const rawOffice = (row.officename || '').trim();
+    if (!/^\d{6}$/.test(pincode) || !rawOffice) continue;
+    postalOffices += 1;
+    pincodeSet.add(pincode);
+
+    const displayName = cleanPostalOfficeName(rawOffice) || rawOffice;
+    const nameNorm = normalizePlaceName(displayName);
+    if (!nameNorm) continue;
+
+    const districtName = resolveCanonicalDistrict(row.district || '');
+    if (!districtName) continue;
+    const districtNorm = normalizePlaceName(districtName);
+
+    let talukName: string | undefined;
+    const postalTaluk = (row.taluk || '').trim();
+    if (postalTaluk) {
+      const postalTalukNorm = normalizePlaceName(postalTaluk);
+      const districtTaluks = taluksByDistrict.get(districtNorm) ?? [];
+      const exact = districtTaluks.find((t) => t.nameNormalized === postalTalukNorm);
+      talukName = exact?.name;
+      if (!talukName) {
+        const loose = districtTaluks.find(
+          (t) =>
+            t.nameNormalized.startsWith(postalTalukNorm) ||
+            postalTalukNorm.startsWith(t.nameNormalized) ||
+            editDistance(t.nameNormalized, postalTalukNorm) <= 1
+        );
+        talukName = loose?.name;
+      }
+    }
+
+    const scopedMatches = (villagesByNorm.get(nameNorm) ?? []).filter(
+      (m) => m.districtNormalized === districtNorm
+    );
+    let match = scopedMatches.find((m) => !talukName || m.taluk === talukName) || scopedMatches[0];
+
+    if (match) {
+      postalMatched += 1;
+      if (!match.pincode) {
+        match.pincode = pincode;
+        const rawNorm = normalizePlaceName(rawOffice);
+        if (rawNorm && rawNorm !== match.nameNormalized && !match.aliases.includes(rawNorm)) {
+          match.aliases.push(rawNorm);
+        }
+        continue;
+      }
+      if (match.pincode === pincode) {
+        const rawNorm = normalizePlaceName(rawOffice);
+        if (rawNorm && rawNorm !== match.nameNormalized && !match.aliases.includes(rawNorm)) {
+          match.aliases.push(rawNorm);
+        }
+        continue;
+      }
+      // Same locality, different PIN — keep a dedicated postal row so every PIN is searchable.
+      talukName = match.taluk;
+    }
+
+    if (!talukName) {
+      talukName = pickTaluk(districtName, taluksByDistrict);
+    }
+    if (!talukName) continue;
+
+    postalInserted += 1;
+    upsert({
+      key: `p:${pincode}:${districtNorm}:${normalizePlaceName(talukName)}:${nameNorm}`,
+      kind: 'place',
+      type: postalOfficeType(row.officeType || ''),
+      name: displayName,
+      nameNormalized: nameNorm,
+      district: districtName,
+      districtNormalized: districtNorm,
+      taluk: talukName,
+      talukNormalized: normalizePlaceName(talukName),
+      pincode,
+      aliases: rawOffice !== displayName ? [normalizePlaceName(rawOffice)] : [],
+    });
+  }
+
+  // Unique pincodes already present on LGD villages (may include codes missing from postal dump).
+  for (const doc of docs.values()) {
+    if (doc.kind === 'place' && doc.pincode && /^\d{6}$/.test(doc.pincode)) {
+      pincodeSet.add(doc.pincode);
+    }
+  }
+
   const all = [...docs.values()];
   const places = all.filter((d) => d.kind === 'place');
   const stats: TnSeedStats = {
@@ -379,6 +507,10 @@ export function buildTnLocationDocs(): { docs: TnLocationDoc[]; stats: TnSeedSta
     extraUlbPlaces,
     ulbMatched,
     ulbUnmatched,
+    postalOffices,
+    postalMatched,
+    postalInserted,
+    uniquePincodes: pincodeSet.size,
   };
 
   return { docs: all, stats };

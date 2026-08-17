@@ -10,8 +10,7 @@ import {
   PaginationInput,
 } from '../validators';
 import { IAttachment } from '../interfaces';
-import path from 'path';
-import { env } from '../config/env';
+import { getUploadDir } from '../middleware/upload.middleware';
 
 const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
   return files.map((file) => ({
@@ -19,7 +18,7 @@ const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
     originalName: file.originalname,
     mimeType: file.mimetype,
     size: file.size,
-    path: path.join(env.UPLOAD_DIR, file.filename),
+    path: `${getUploadDir()}/${file.filename}`,
   }));
 };
 
