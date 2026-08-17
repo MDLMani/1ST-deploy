@@ -36,7 +36,7 @@ export interface ITnLocation extends Document {
 
 const tnLocationSchema = new Schema<ITnLocation>(
   {
-    key: { type: String, required: true, unique: true, index: true },
+    key: { type: String, required: true, unique: true },
     kind: { type: String, required: true, enum: TN_LOCATION_KINDS, index: true },
     type: { type: String, required: true, enum: TN_PLACE_TYPES, index: true },
     name: { type: String, required: true, trim: true, maxlength: 160 },

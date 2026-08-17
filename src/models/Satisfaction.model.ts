@@ -19,6 +19,4 @@ const satisfactionSchema = new Schema<ISatisfactionResponse>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-satisfactionSchema.index({ ticket: 1 }, { unique: true });
-
 export const Satisfaction = mongoose.model<ISatisfactionResponse>('Satisfaction', satisfactionSchema);

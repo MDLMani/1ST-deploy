@@ -33,14 +33,27 @@ async function bootstrap(): Promise<void> {
   await bootstrapPromise;
 }
 
+const healthPayload = {
+  success: true,
+  message: 'TVK Support API is running',
+  data: { status: 'ok' as const },
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const path = (req.url ?? '').split('?')[0];
-  if (path === '/health' || path === '/api/v1/health') {
+  if (path === '/') {
     return res.status(200).json({
-      success: true,
-      message: 'TVK Support API is running',
-      data: { status: 'ok' },
+      ...healthPayload,
+      data: {
+        ...healthPayload.data,
+        docs: '/api-docs',
+        health: '/health',
+        api: '/api/v1',
+      },
     });
+  }
+  if (path === '/health' || path === '/api/v1/health') {
+    return res.status(200).json(healthPayload);
   }
 
   try {

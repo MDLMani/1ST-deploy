@@ -30,7 +30,6 @@ const customFieldSchema = new Schema<ICustomField>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-customFieldSchema.index({ key: 1 }, { unique: true });
 customFieldSchema.index({ department: 1, isActive: 1 });
 
 export const CustomField = mongoose.model<ICustomField>('CustomField', customFieldSchema);

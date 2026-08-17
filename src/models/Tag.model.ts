@@ -18,7 +18,6 @@ const tagSchema = new Schema<ITag>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-tagSchema.index({ name: 1 }, { unique: true });
 tagSchema.index({ usageCount: -1 });
 
 export const Tag = mongoose.model<ITag>('Tag', tagSchema);
