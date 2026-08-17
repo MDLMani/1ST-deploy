@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { env } from './env';
-import { isServerlessRuntime } from './runtime';
 import { logger } from '../utils/logger';
 
 let memoryServer: { stop: () => Promise<boolean> } | null = null;
@@ -40,25 +39,11 @@ async function resolveMongoUri(): Promise<string> {
   return uri;
 }
 
-export const connectDatabase = async (): Promise<void> => {
-  if (mongoose.connection.readyState === 1) {
-    return;
-  }
+let listenersAttached = false;
 
-  try {
-    const uri = await resolveMongoUri();
-    await mongoose.connect(uri, {
-      maxPoolSize: isServerlessRuntime() ? 5 : 10,
-      serverSelectionTimeoutMS: isServerlessRuntime() ? 8000 : 10000,
-    });
-    logger.info('MongoDB connected successfully');
-  } catch (error) {
-    logger.error('MongoDB connection failed', { error });
-    if (isServerlessRuntime()) {
-      throw error;
-    }
-    process.exit(1);
-  }
+function attachConnectionListeners(): void {
+  if (listenersAttached) return;
+  listenersAttached = true;
 
   mongoose.connection.on('disconnected', () => {
     logger.warn('MongoDB disconnected');
@@ -89,14 +74,17 @@ export const connectDatabase = async (): Promise<void> => {
 
     if (!cache.promise) {
       const uri = await resolveMongoUri();
-      cache.promise = mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 10000,
-        socketTimeoutMS: 45000,
-      }).then((connection) => {
-        logger.info('MongoDB connected successfully');
-        attachConnectionListeners();
-        return connection;
-      });
+      cache.promise = mongoose
+        .connect(uri, {
+          maxPoolSize: 5,
+          serverSelectionTimeoutMS: 10000,
+          socketTimeoutMS: 45000,
+        })
+        .then((connection) => {
+          logger.info('MongoDB connected successfully');
+          attachConnectionListeners();
+          return connection;
+        });
     }
 
     try {
@@ -110,9 +98,16 @@ export const connectDatabase = async (): Promise<void> => {
     return;
   }
 
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
   try {
     const uri = await resolveMongoUri();
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+    });
     logger.info('MongoDB connected successfully');
     attachConnectionListeners();
   } catch (error) {

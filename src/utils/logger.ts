@@ -4,7 +4,6 @@ import fs from 'fs';
 import { env } from '../config/env';
 import { isServerlessRuntime } from '../config/runtime';
 
-const isVercel = Boolean(process.env.VERCEL);
 const logsDir = path.join(process.cwd(), 'logs');
 const useFileLogs = !isServerlessRuntime();
 

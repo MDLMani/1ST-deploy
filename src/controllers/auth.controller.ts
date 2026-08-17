@@ -11,6 +11,7 @@ import {
   ForgotPasswordInput,
   ResetPasswordInput,
   VerifyOtpInput,
+  ChangePasswordInput,
 } from '../validators';
 import { verifyRefreshToken } from '../utils/jwt';
 
@@ -66,14 +67,13 @@ export const getProfile = asyncHandler(async (req, res: Response) => {
 });
 
 export const updateProfile = asyncHandler(async (req, res: Response) => {
-  const input = req.body as UpdateProfileInput;
-  const user = await authService.updateProfile(req.user!.userId, input);
-  sendSuccess(res, 'Profile updated successfully', { user });
+  const account = await accountService.updateProfile(req.user!.userId, req.body);
+  sendSuccess(res, 'Profile updated successfully', { user: account });
 });
 
 export const changePassword = asyncHandler(async (req, res: Response) => {
-  const input = req.body as ChangePasswordInput;
-  await authService.changePassword(req.user!.userId, input);
+  const { currentPassword, newPassword } = req.body as ChangePasswordInput;
+  await accountService.changePassword(req.user!.userId, currentPassword, newPassword);
   sendSuccess(res, 'Password changed successfully');
 });
 

@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { canLogOtpWithoutSmtp, env, isSmtpConfigured } from '../config/env';
 import { logger } from '../utils/logger';
 import { ApiError } from '../utils/ApiError';
@@ -13,10 +13,6 @@ import {
 let transporter: Transporter | null = null;
 let smtpReady = false;
 let initPromise: Promise<boolean> | null = null;
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function getTransporter(): Transporter {
   if (!transporter) {
@@ -78,7 +74,7 @@ export async function ensureSmtpReady(): Promise<void> {
   if (smtpReady && transporter) return;
 
   if (!initPromise) {
-    initPromise = initSmtp().finally(() => {
+    initPromise = verifySmtpConnection().finally(() => {
       initPromise = null;
     });
   }
@@ -87,33 +83,6 @@ export async function ensureSmtpReady(): Promise<void> {
   if (!ok) {
     throw new Error('SMTP is not available');
   }
-}
-
-/** @deprecated Use initSmtp — kept for compatibility */
-export const verifySmtpConnection = initSmtp;
-
-async function sendMailWithRetry(mail: SendMailOptions, attempts = 3) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      await ensureSmtpReady();
-      const info = await getTransporter().sendMail(mail);
-      smtpReady = true;
-      return info;
-    } catch (error) {
-      lastError = error;
-      smtpReady = false;
-      resetTransporter();
-
-      if (attempt < attempts - 1) {
-        logger.warn(`SMTP send attempt ${attempt + 1} failed, retrying...`, { error });
-        await delay(400 * (attempt + 1));
-      }
-    }
-  }
-
-  throw lastError;
 }
 
 export async function sendPasswordResetOtp(to: string, otp: string, name: string): Promise<void> {

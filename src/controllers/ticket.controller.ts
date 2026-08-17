@@ -11,6 +11,7 @@ import {
 } from '../validators';
 import { IAttachment } from '../interfaces';
 import { getUploadDir } from '../middleware/upload.middleware';
+import { TICKET_CATEGORIES } from '../constants';
 
 const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
   return files.map((file) => ({

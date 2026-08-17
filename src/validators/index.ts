@@ -529,6 +529,3 @@ export const familyMemberSchema = z.object({
 });
 
 export const updateFamilyMemberSchema = familyMemberSchema.partial();
-
-export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

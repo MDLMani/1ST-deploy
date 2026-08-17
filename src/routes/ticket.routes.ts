@@ -6,6 +6,7 @@ import {
   getTicketStats,
   getTicketTrends,
   getTicketById,
+  getTicketCategories,
   updateStatus,
   assignTicket,
   getTicketSLAStatus,

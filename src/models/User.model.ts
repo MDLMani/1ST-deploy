@@ -63,6 +63,7 @@ export interface IUser extends Document {
   resetOtpHash?: string;
   resetOtpExpires?: Date;
   resetOtpAttempts?: number;
+  resetOtpLastSentAt?: Date;
   phoneOtpHash?: string;
   phoneOtpExpires?: Date;
   phoneOtpAttempts?: number;
@@ -203,6 +204,10 @@ const userSchema = new Schema<IUser>(
     resetOtpAttempts: {
       type: Number,
       default: 0,
+      select: false,
+    },
+    resetOtpLastSentAt: {
+      type: Date,
       select: false,
     },
     phoneOtpHash: {

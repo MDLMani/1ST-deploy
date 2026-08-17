@@ -16,8 +16,14 @@ import {
   INVITATION_EXPIRY_DAYS,
   UserRole,
 } from '../constants';
-import { RegisterInput, LoginInput, ForgotPasswordInput, ResetPasswordInput, VerifyOtpInput } from '../validators';
-import { sendPasswordResetOtp } from './email.service';
+import {
+  RegisterInput,
+  LoginInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+  VerifyOtpInput,
+} from '../validators';
+import { sendPasswordResetOtp, ensureSmtpReady } from './email.service';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
@@ -338,57 +344,6 @@ export class AuthService {
       resetOtpAttempts: 0,
       resetOtpLastSentAt: undefined,
     });
-  }
-
-  async updateProfile(userId: string, input: UpdateProfileInput) {
-    const user = await userRepository.findById(userId);
-    if (!user) {
-      throw new ApiError(404, 'User not found');
-    }
-
-    const email = input.email.toLowerCase();
-    if (email !== user.email.toLowerCase()) {
-      const existing = await userRepository.findByEmail(email);
-      if (existing && existing._id.toString() !== userId) {
-        throw new ApiError(409, 'Email is already in use');
-      }
-    }
-
-    const updated = await userRepository.updateById(userId, {
-      name: input.name.trim(),
-      email,
-    });
-
-    if (!updated) {
-      throw new ApiError(404, 'User not found');
-    }
-
-    return {
-      id: updated._id,
-      name: updated.name,
-      email: updated.email,
-      role: updated.role,
-    };
-  }
-
-  async changePassword(userId: string, input: ChangePasswordInput) {
-    const user = await userRepository.findByIdWithPassword(userId);
-    if (!user?.password) {
-      throw new ApiError(404, 'User not found');
-    }
-
-    const isCurrentValid = await bcrypt.compare(input.currentPassword, user.password);
-    if (!isCurrentValid) {
-      throw new ApiError(400, 'Current password is incorrect');
-    }
-
-    const isSamePassword = await bcrypt.compare(input.newPassword, user.password);
-    if (isSamePassword) {
-      throw new ApiError(400, 'New password must be different from your current password');
-    }
-
-    const hashedPassword = await bcrypt.hash(input.newPassword, SALT_ROUNDS);
-    await userRepository.updateById(userId, { password: hashedPassword });
   }
 }
 
