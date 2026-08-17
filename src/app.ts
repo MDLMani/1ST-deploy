@@ -25,12 +25,29 @@ app.use(
   })
 );
 
+const healthPayload = {
+  success: true,
+  message: 'TVK Support API is running',
+  data: { status: 'ok' as const },
+};
+
 // After CORS so Flutter web (Chrome) can probe health during ApiConfig init.
+app.get('/', (_req, res) => {
+  res.json({
+    ...healthPayload,
+    data: {
+      ...healthPayload.data,
+      docs: '/api-docs',
+      health: '/health',
+      api: '/api/v1',
+    },
+  });
+});
 app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
+  res.json(healthPayload);
 });
 app.get('/api/v1/health', (_req, res) => {
-  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
+  res.json(healthPayload);
 });
 
 const apiLimiter = rateLimit({

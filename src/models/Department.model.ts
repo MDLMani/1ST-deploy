@@ -40,7 +40,6 @@ const departmentSchema = new Schema<IDepartment>(
   { timestamps: true }
 );
 
-departmentSchema.index({ slug: 1 }, { unique: true });
 departmentSchema.index({ isActive: 1 });
 
 export const Department = mongoose.model<IDepartment>('Department', departmentSchema);
