@@ -3,34 +3,46 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
-import path from 'path';
-import { env, corsOrigins } from './config/env';
+import { env, corsOriginDelegate } from './config/env';
 import { swaggerSpec } from './config/swagger';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { requestLogMiddleware } from './middleware/requestLog.middleware';
+import { getUploadDir } from './middleware/upload.middleware';
 
 const app = express();
 const isDev = env.NODE_ENV === 'development';
 
-// Health check before security middleware — must be reachable from mobile on LAN
-app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
-});
+if (process.env.VERCEL || env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
-    origin: corsOrigins,
+    origin: corsOriginDelegate,
     credentials: true,
   })
 );
 
+// After CORS so Flutter web (Chrome) can probe health during ApiConfig init.
+app.get('/health', (_req, res) => {
+  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
+});
+app.get('/api/v1/health', (_req, res) => {
+  res.json({ success: true, message: 'TVK Support API is running', data: { status: 'ok' } });
+});
+
 const apiLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
-  max: isDev ? Math.max(env.RATE_LIMIT_MAX, 500) : env.RATE_LIMIT_MAX,
+  max: isDev ? 10000 : env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    if (isDev) return true;
+    const path = req.originalUrl || req.path;
+    return path.includes('/notifications') || path.includes('/refresh-token');
+  },
   message: {
     success: false,
     message: 'Too many requests, please try again later',
@@ -52,7 +64,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogMiddleware);
 
-app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
+app.use('/uploads', express.static(getUploadDir()));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

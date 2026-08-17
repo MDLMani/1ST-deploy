@@ -1,8 +1,14 @@
 import nodemailer from 'nodemailer';
-import type { Transporter, SendMailOptions } from 'nodemailer';
-import { env, isSmtpConfigured } from '../config/env';
+import { canLogOtpWithoutSmtp, env, isSmtpConfigured } from '../config/env';
 import { logger } from '../utils/logger';
-import { renderPasswordResetOtpEmail } from '../templates/email.templates';
+import { ApiError } from '../utils/ApiError';
+import {
+  renderPasswordResetOtpEmail,
+  renderStaffInvitationEmail,
+  renderTicketClosureReceiptEmail,
+  StaffInvitationTemplateVars,
+  TicketClosureReceiptTemplateVars,
+} from '../templates/email.templates';
 
 let transporter: Transporter | null = null;
 let smtpReady = false;
@@ -34,20 +40,22 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
-function resetTransporter() {
-  if (transporter) {
-    transporter.close();
-    transporter = null;
-  }
-  smtpReady = false;
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
-/** Warm SMTP pool at startup — avoids first-request cold connection failure */
-export async function initSmtp(): Promise<boolean> {
+export async function verifySmtpConnection(): Promise<boolean> {
   if (!isSmtpConfigured()) {
-    logger.warn(
-      'SMTP is not configured. Password reset emails will not be sent. Set SMTP_* vars in .env (see .env.example).'
-    );
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(
+        'SMTP is not configured. Password reset OTPs will be logged to the server console (development / SMTP_LOG_OTP).'
+      );
+    } else {
+      logger.warn(
+        'SMTP is not configured. Password reset will return 503 until SMTP_* vars are set (see .env.example).'
+      );
+    }
     return false;
   }
 
@@ -60,7 +68,7 @@ export async function initSmtp(): Promise<boolean> {
   } catch (error) {
     smtpReady = false;
     logger.error('SMTP connection failed. Check SMTP_HOST, SMTP_USER, and SMTP_PASSWORD in .env', {
-      error,
+      message: formatError(error),
     });
     return false;
   }
@@ -112,24 +120,134 @@ export async function sendPasswordResetOtp(to: string, otp: string, name: string
   const { subject, text, html } = renderPasswordResetOtpEmail({ name, otp });
 
   if (!isSmtpConfigured()) {
-    if (env.NODE_ENV === 'development') {
-      logger.warn(`[DEV] SMTP not configured — OTP for ${to}: ${otp}`);
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(`[OTP] Password reset code for ${to}: ${otp}`);
       return;
     }
-    throw new Error('Email service is not configured');
+
+    throw new ApiError(
+      503,
+      'Password reset email is not available. The server administrator must configure SMTP.'
+    );
   }
 
-  const info = await sendMailWithRetry({
-    from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
-    to,
-    subject,
-    text,
-    html,
-    priority: 'high',
-  });
+  try {
+    await getTransporter().sendMail({
+      from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
+      to,
+      subject,
+      text,
+      html,
+    });
 
-  logger.info(`Password reset OTP email sent to ${to}`, {
-    messageId: info.messageId,
-    accepted: info.accepted,
-  });
+    logger.info(`Password reset OTP email accepted by SMTP for ${to}`);
+  } catch (error) {
+    logger.error('SMTP sendMail failed', { email: to, message: formatError(error) });
+    throw new ApiError(
+      503,
+      'Failed to send reset email. Verify SMTP credentials (use a Gmail App Password if using Google).'
+    );
+  }
+}
+
+export async function sendTicketClosureReceiptEmail(
+  to: string,
+  vars: TicketClosureReceiptTemplateVars
+): Promise<void> {
+  if (!to || !to.includes('@')) {
+    logger.warn(`Ticket closure receipt skipped for invalid email: ${to}`);
+    return;
+  }
+
+  const { subject, text, html } = renderTicketClosureReceiptEmail(vars);
+
+  if (!isSmtpConfigured()) {
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(`[RECEIPT] SMTP not configured — ticket receipt logged only for ${to}`);
+      logger.info(`[RECEIPT] ${subject} | ${text}`);
+      return;
+    }
+    throw new ApiError(
+      503,
+      'Ticket receipt email is not available. The server administrator must configure SMTP.'
+    );
+  }
+
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
+      to,
+      subject,
+      text,
+      html,
+      headers: {
+        'X-TVK-Ticket-Receipt': vars.ticketNumber,
+      },
+    });
+    logger.info(`Ticket closure receipt email accepted by SMTP for ${to}`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+  } catch (error) {
+    logger.error('SMTP sendMail failed for ticket receipt', {
+      email: to,
+      message: formatError(error),
+    });
+    throw new ApiError(503, 'Failed to send ticket receipt email. Please try again later.');
+  }
+}
+
+export async function sendStaffInvitationEmail(
+  to: string,
+  vars: StaffInvitationTemplateVars
+): Promise<void> {
+  const invitee = to.toLowerCase().trim();
+  if (!invitee.includes('@')) {
+    throw new ApiError(400, 'Invalid invitee email address');
+  }
+
+  const { subject, text, html } = renderStaffInvitationEmail(vars);
+
+  if (!isSmtpConfigured()) {
+    if (canLogOtpWithoutSmtp()) {
+      logger.warn(
+        `[INVITE] SMTP not configured — invitation for invitee ${invitee} logged only. ` +
+          `token=${vars.token}${vars.acceptUrl ? ` url=${vars.acceptUrl}` : ''}`
+      );
+      return;
+    }
+    throw new ApiError(
+      503,
+      'Invitation email is not available. The server administrator must configure SMTP.'
+    );
+  }
+
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"TVK Support" <${env.SMTP_FROM_EMAIL}>`,
+      to: invitee,
+      subject,
+      text,
+      html,
+      headers: {
+        'X-TVK-Invitee': invitee,
+      },
+    });
+    logger.info(`Staff invitation email accepted by SMTP for invitee ${invitee}`, {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+    if (Array.isArray(info.rejected) && info.rejected.length > 0) {
+      throw new ApiError(503, `Invitation email was rejected for ${invitee}`);
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    logger.error('SMTP sendMail failed for invitation', {
+      email: invitee,
+      message: formatError(error),
+    });
+    throw new ApiError(503, 'Failed to send invitation email. Please try again later.');
+  }
 }

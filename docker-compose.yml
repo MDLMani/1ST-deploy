@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:7
@@ -18,20 +16,41 @@ services:
     restart: unless-stopped
     ports:
       - '5000:5000'
+    env_file:
+      - .env
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 5000
-      MONGODB_URI: mongodb://mongodb:27017/tvk_support
-      JWT_ACCESS_SECRET: change-this-access-secret-min-16-chars
-      JWT_REFRESH_SECRET: change-this-refresh-secret-min-16-chars
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/tvk_support}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-this-access-secret-min-16-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-min-16-chars}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      CORS_ORIGIN: http://localhost:3000,http://localhost:5173
+      CORS_ORIGIN: '*'
       RATE_LIMIT_WINDOW_MS: 900000
-      RATE_LIMIT_MAX: 100
+      RATE_LIMIT_MAX: 2000
       UPLOAD_DIR: uploads
       MAX_FILE_SIZE: 5242880
       SWAGGER_SERVER_URL: http://localhost:5000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-llama-3.1-8b-instant}
+      # Invitation + password-reset emails go to the recipient address (invitee / user).
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_LOG_OTP: ${SMTP_LOG_OTP:-false}
+      INVITE_ACCEPT_URL: ${INVITE_ACCEPT_URL:-http://192.168.1.16:5000/api/v1/user-management/invitations/accept}
+      CRON_SECRET: ${CRON_SECRET:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:support@tvk.com}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-tvksuppourt@gmail.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-tvksuppourt}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-TVK Support}
     volumes:
       - uploads_data:/app/uploads
       - logs_data:/app/logs

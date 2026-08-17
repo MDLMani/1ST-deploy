@@ -1,13 +1,21 @@
+import { Types } from 'mongoose';
+import { departmentRepository } from '../repositories/department.repository';
 import { ticketRepository, TicketQueryOptions } from '../repositories/ticket.repository';
 import { userRepository } from '../repositories/user.repository';
+import { tagRepository } from '../repositories/tag.repository';
 import { ApiError } from '../utils/ApiError';
+import { isStrictObjectId, toObjectIds } from '../utils/objectId';
 import { TicketPriority, TicketStatus, UserRole, SOCKET_EVENTS } from '../constants';
 import { IAttachment } from '../interfaces';
 import { CreateTicketInput, UpdateStatusInput, AssignTicketInput } from '../validators';
 import { getSocketIO } from '../sockets';
 import { getTicketOwnerId } from '../utils/ticket.helpers';
 import { notificationService } from './notification.service';
-import { Types } from 'mongoose';
+import { customFieldService } from './customField.service';
+import { slaService } from './sla.service';
+import { knowledgeBaseService } from './knowledgeBase.service';
+import { assignmentService } from './assignment.service';
+import { sendTicketClosureReceiptEmail } from './email.service';
 
 export class TicketService {
   private async generateTicketNumber(): Promise<string> {
@@ -16,8 +24,56 @@ export class TicketService {
     return `TVK-${year}-${String(count + 1).padStart(6, '0')}`;
   }
 
+  private async resolveDepartmentId(raw: string | undefined): Promise<string> {
+    const value = raw?.trim();
+    if (!value) {
+      throw new ApiError(400, 'Department is required');
+    }
+
+    if (isStrictObjectId(value)) {
+      const byId = await departmentRepository.findById(value);
+      if (byId?.isActive) return byId._id.toString();
+    }
+
+    const bySlug = await departmentRepository.findBySlug(value.toLowerCase());
+    if (bySlug?.isActive) return bySlug._id.toString();
+
+    throw new ApiError(400, 'Department not found');
+  }
+
   async createTicket(userId: string, input: CreateTicketInput, attachments: IAttachment[] = []) {
+    if (!isStrictObjectId(userId)) {
+      throw new ApiError(401, 'Invalid or expired access token');
+    }
+
     const ticketNumber = await this.generateTicketNumber();
+
+    let customFields = input.customFields;
+    if (typeof customFields === 'string') {
+      try {
+        customFields = JSON.parse(customFields);
+      } catch {
+        customFields = undefined;
+      }
+    }
+
+    let tagIds = input.tags;
+    if (tagIds && !Array.isArray(tagIds)) {
+      tagIds = [tagIds as unknown as string];
+    }
+    const safeTagIds = (tagIds ?? []).map((id) => String(id).trim()).filter(isStrictObjectId);
+
+    const departmentId = await this.resolveDepartmentId(input.department);
+
+    // Validate custom fields if provided
+    if (customFields && Object.keys(customFields).length > 0) {
+      await customFieldService.validateCustomFields(departmentId, customFields);
+    }
+
+    const creator = await userRepository.findById(userId);
+    const district = input.district?.trim() || creator?.district;
+    const taluk = input.taluk?.trim() || creator?.taluk;
+    const city = input.city?.trim() || creator?.city;
 
     const ticket = await ticketRepository.create({
       ticketNumber,
@@ -25,23 +81,67 @@ export class TicketService {
       title: input.title,
       description: input.description,
       category: input.category,
+      customCategory: input.customCategory?.trim() || undefined,
       priority: input.priority ?? TicketPriority.MEDIUM,
       status: TicketStatus.OPEN,
       attachments,
       overdue: false,
       reminderCount: 0,
+      department: new Types.ObjectId(departmentId),
+      district,
+      taluk,
+      city,
+      tags: toObjectIds(safeTagIds),
+      customFields: customFields ? new Map(Object.entries(customFields)) : new Map(),
+      isInternal: input.isInternal ?? false,
+      identity:
+        input.identityFullName && input.identityFatherName && input.identityIdType
+          ? {
+              fullName: input.identityFullName.trim(),
+              fatherName: input.identityFatherName.trim(),
+              idType: input.identityIdType.trim(),
+            }
+          : undefined,
     });
 
+    // Start SLA
+    await slaService.startSLA(ticket._id.toString());
+
+    // Auto-assign by department + location (best available staff match)
+    try {
+      await assignmentService.autoAssignTicket(
+        ticket._id.toString(),
+        departmentId,
+        input.category,
+        ticket.priority
+      );
+    } catch {
+      // Ignore auto-assignment errors — ticket remains unassigned
+    }
+
+    // Increment tag usage
+    if (safeTagIds.length > 0) {
+      await tagRepository.incrementUsage(safeTagIds);
+    }
+
     const populated = await ticketRepository.findById(ticket._id.toString());
+
+    // Suggest knowledge base articles
+    let suggestedArticles: any[] = [];
+    try {
+      const tags = populated?.tags?.map((t: any) => t.name || '') ?? [];
+      suggestedArticles = await knowledgeBaseService.getSuggestedArticles(input.category, tags, 3);
+    } catch {
+      // Ignore KB errors
+    }
 
     const io = getSocketIO();
     if (io && populated) {
       io.emit(SOCKET_EVENTS.TICKET_CREATED, populated);
     }
 
-    const ownerId = userId;
     await notificationService.notifyUser(
-      ownerId,
+      userId,
       'TICKET_CREATED',
       {
         ticketNumber: ticket.ticketNumber,
@@ -50,7 +150,7 @@ export class TicketService {
       ticket._id.toString()
     );
 
-    return populated;
+    return { ...populated?.toObject(), suggestedArticles };
   }
 
   async getUserTickets(userId: string, options: TicketQueryOptions) {
@@ -70,6 +170,134 @@ export class TicketService {
     };
   }
 
+  async getTrends(from?: string, to?: string, granularity: 'day' | 'month' = 'month') {
+    const parseCalendar = (raw: string, endOfDay = false) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+      if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]) - 1;
+        const d = Number(m[3]);
+        return endOfDay
+          ? new Date(y, mo, d, 23, 59, 59, 999)
+          : new Date(y, mo, d, 0, 0, 0, 0);
+      }
+      return new Date(raw);
+    };
+
+    const now = new Date();
+    const start = from
+      ? parseCalendar(from, false)
+      : new Date(now.getFullYear(), now.getMonth() - 4, 1);
+    const end = to ? parseCalendar(to, true) : now;
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new ApiError(400, 'Invalid from/to date');
+    }
+    if (start > end) {
+      throw new ApiError(400, 'from must be before to');
+    }
+    const raw = await ticketRepository.getTrends({ from: start, to: end, granularity });
+    const byKey = new Map(raw.map((p) => [p.name, p.value]));
+    const points: { name: string; value: number }[] = [];
+
+    if (granularity === 'day') {
+      const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      while (cursor <= last) {
+        const name = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        points.push({ name, value: byKey.get(name) ?? 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else {
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+      while (cursor <= last) {
+        const name = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+        points.push({ name, value: byKey.get(name) ?? 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+
+    return {
+      from: start,
+      to: end,
+      granularity,
+      points: points.length > 0 ? points : raw,
+    };
+  }
+
+  private async buildTicketClosureReceipt(ticket: any, options: { sendEmail?: boolean } = {}) {
+    const finalStatuses = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
+    if (!finalStatuses.includes(ticket.status)) {
+      return null;
+    }
+
+    const sendEmail = options.sendEmail ?? false;
+
+    const assignee =
+      ticket.assignedTo && typeof ticket.assignedTo === 'object'
+        ? ticket.assignedTo
+        : ticket.assignedTo
+          ? await userRepository.findById(String(ticket.assignedTo))
+          : null;
+
+    const sectionDept =
+      ticket.department && typeof ticket.department === 'object'
+        ? ticket.department
+        : await departmentRepository.findById(String(ticket.department ?? ''));
+
+    let sectionHead: any = null;
+    if (assignee?.reportingManager) {
+      sectionHead =
+        typeof assignee.reportingManager === 'object'
+          ? assignee.reportingManager
+          : await userRepository.findById(String(assignee.reportingManager));
+    }
+
+    if (!sectionHead && assignee?.department) {
+      const departmentAdmins = await userRepository.findAll({
+        department: assignee.department,
+        role: UserRole.ADMIN,
+        isActive: { $ne: false },
+      });
+      sectionHead = departmentAdmins[0] ?? null;
+    }
+
+    if (!sectionHead && sectionDept) {
+      const departmentAdmins = await userRepository.findAll({
+        department: sectionDept._id,
+        role: UserRole.ADMIN,
+        isActive: { $ne: false },
+      });
+      sectionHead = departmentAdmins[0] ?? null;
+    }
+
+    const user =
+      ticket.user && typeof ticket.user === 'object'
+        ? ticket.user
+        : ticket.user
+          ? await userRepository.findById(String(ticket.user))
+          : null;
+
+    const receipt = {
+      ticketNumber: ticket.ticketNumber,
+      title: ticket.title,
+      status: ticket.status,
+      complaintSummary: ticket.description,
+      assignedTo: assignee?.name ?? 'Unassigned',
+      assignedToEmail: assignee?.email,
+      departmentName: sectionDept?.name ?? 'General',
+      sectionHeadName: sectionHead?.name ?? 'Department oversight',
+      sectionHeadEmail: sectionHead?.email,
+      closedAt: (ticket.resolvedAt ?? ticket.updatedAt ?? new Date()).toISOString(),
+    };
+
+    if (sendEmail && user?.email) {
+      await sendTicketClosureReceiptEmail(user.email, receipt);
+    }
+
+    return receipt;
+  }
+
   async getTicketById(ticketId: string, requesterId: string, requesterRole: UserRole) {
     const ticket = await ticketRepository.findById(ticketId);
     if (!ticket) {
@@ -81,6 +309,15 @@ export class TicketService {
 
     if (!isOwner && !isStaff) {
       throw new ApiError(403, 'Access denied');
+    }
+
+    const receipt = await this.buildTicketClosureReceipt(ticket, { sendEmail: false });
+    if (receipt) {
+      (ticket as any).receipt = receipt;
+      (ticket as any).sectionHead = {
+        name: receipt.sectionHeadName,
+        email: receipt.sectionHeadEmail,
+      };
     }
 
     return ticket;
@@ -104,11 +341,34 @@ export class TicketService {
 
     if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(input.status)) {
       updateData.overdue = false;
+      updateData.resolvedAt = new Date();
+    }
+
+    if (input.status === TicketStatus.PENDING) {
+      await slaService.pauseSLA(ticketId);
+    } else if (ticket.status === TicketStatus.PENDING) {
+      await slaService.resumeSLA(ticketId);
     }
 
     const updated = await ticketRepository.updateById(ticketId, updateData);
     if (!updated) {
       throw new ApiError(404, 'Ticket not found');
+    }
+
+    const shouldSendReceipt =
+      ![TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status) &&
+      [TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(input.status);
+
+    let receipt: Record<string, any> | null = null;
+    if (shouldSendReceipt) {
+      receipt = await this.buildTicketClosureReceipt(updated, { sendEmail: true });
+      if (receipt) {
+        (updated as any).receipt = receipt;
+        (updated as any).sectionHead = {
+          name: receipt.sectionHeadName,
+          email: receipt.sectionHeadEmail,
+        };
+      }
     }
 
     const io = getSocketIO();
@@ -133,7 +393,7 @@ export class TicketService {
       updated._id.toString()
     );
 
-    return updated;
+    return receipt ? { ...updated.toObject(), receipt, sectionHead: (updated as any).sectionHead } : updated;
   }
 
   async assignTicket(
@@ -163,6 +423,9 @@ export class TicketService {
       assignedTo: input.assignedTo,
       status: TicketStatus.IN_PROGRESS,
     });
+
+    // Reset SLA response timer on re-assignment
+    await slaService.startSLA(ticketId);
 
     if (!updated) {
       throw new ApiError(404, 'Ticket not found');

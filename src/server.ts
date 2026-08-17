@@ -4,22 +4,35 @@ import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initSocketIO } from './sockets';
 import { initWebPush } from './services/push.service';
-import { initSmtp } from './services/email.service';
+import { initFirebase } from './services/fcm.service';
+import { verifySmtpConnection } from './services/email.service';
 import { startOverdueReminderJob } from './jobs/overdueReminder.job';
+import { startSLAMonitorJob } from './jobs/slaMonitor.job';
+import { startEscalationProcessorJob } from './jobs/escalationProcessor.job';
+import { locationService } from './services/location.service';
+import { departmentService } from './services/department.service';
+import { ensureDefaultAdmin } from './services/defaultAdmin.service';
 import { logger } from './utils/logger';
 
 const startServer = async (): Promise<void> => {
-  const [, smtpOk] = await Promise.all([connectDatabase(), initSmtp()]);
-
-  if (!smtpOk && env.NODE_ENV === 'development') {
-    logger.warn('SMTP warmup skipped or failed — first OTP email may retry automatically');
-  }
+  await connectDatabase();
+  await ensureDefaultAdmin();
+  void locationService.ensureSeeded().catch((error) => {
+    logger.error('Tamil Nadu location seed failed', { error });
+  });
+  void departmentService.ensureSeeded().catch((error) => {
+    logger.error('Service department seed failed', { error });
+  });
 
   initWebPush();
+  initFirebase();
+  await verifySmtpConnection();
 
   const httpServer = http.createServer(app);
   initSocketIO(httpServer);
   startOverdueReminderJob();
+  startSLAMonitorJob();
+  startEscalationProcessorJob();
 
   httpServer.listen(env.PORT, env.HOST, () => {
     logger.info(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`);

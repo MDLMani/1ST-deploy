@@ -24,14 +24,21 @@ export const errorHandler = (
   }
 
   if (err.name === 'CastError') {
-    sendError(res, 'Invalid ID format', 400);
+    const castErr = err as Error & { path?: string; value?: unknown };
+    const detail =
+      castErr.path != null
+        ? ` (${castErr.path}: ${String(castErr.value ?? '')})`
+        : '';
+    sendError(res, `Invalid ID format${detail}`, 400);
     return;
   }
 
-  const parseError = err as SyntaxError & { status?: number; type?: string };
-  if (err instanceof SyntaxError && parseError.status === 400 && parseError.type === 'entity.parse.failed') {
-    sendError(res, 'Invalid JSON in request body', 400);
-    return;
+  if (err instanceof SyntaxError) {
+    const bodyParserErr = err as SyntaxError & { status?: number; type?: string };
+    if (bodyParserErr.status === 400 && bodyParserErr.type === 'entity.parse.failed') {
+      sendError(res, 'Invalid JSON in request body', 400);
+      return;
+    }
   }
 
   if (err.name === 'MongoServerError' && (err as { code?: number }).code === 11000) {

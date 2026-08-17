@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { connectDatabase } from '../../src/config/database';
-import { runOverdueReminderCheck } from '../../src/jobs/overdueReminder.job';
 import { env } from '../../src/config/env';
+import { runOverdueReminderCheck } from '../../src/jobs/overdueReminder.job';
+import { runSlaMonitorCheck } from '../../src/jobs/slaMonitor.job';
+import { runEscalationProcessor } from '../../src/jobs/escalationProcessor.job';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -15,17 +17,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await connectDatabase();
-    const result = await runOverdueReminderCheck();
+    const overdue = await runOverdueReminderCheck();
+    await runSlaMonitorCheck();
+    await runEscalationProcessor();
     return res.json({
       success: true,
-      message: 'Overdue check completed',
-      data: result,
+      message: 'Scheduled jobs completed',
+      data: { overdue },
     });
   } catch (error) {
-    console.error('Overdue cron failed', error);
+    console.error('Scheduled jobs failed', error);
     return res.status(500).json({
       success: false,
-      message: 'Overdue check failed',
+      message: 'Scheduled jobs failed',
     });
   }
 }

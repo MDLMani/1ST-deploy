@@ -1,21 +1,39 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { Request } from 'express';
 import { env } from '../config/env';
+import { isServerlessRuntime } from '../config/runtime';
 import { ALLOWED_MIME_TYPES } from '../constants';
 import { ApiError } from '../utils/ApiError';
 
-const isVercel = Boolean(process.env.VERCEL);
-const uploadDir = path.join(isVercel ? '/tmp' : process.cwd(), env.UPLOAD_DIR);
+/** Vercel/Lambda filesystem is read-only except `/tmp`. */
+const isServerless = isServerlessRuntime();
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const uploadDir = isServerless
+  ? path.join(os.tmpdir(), 'tvk-uploads')
+  : path.join(process.cwd(), env.UPLOAD_DIR);
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (error) {
+  // Do not crash the whole API if uploads dir cannot be created at import time.
+  console.warn('Upload directory unavailable', { uploadDir, error });
 }
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
+    try {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, uploadDir);
+    }
   },
   filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -32,9 +50,11 @@ const fileFilter = (
   if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new ApiError(400, 'Invalid file type. Allowed: images and PDF') as unknown as null, false);
+    cb(new ApiError(400, 'Invalid file type. Allowed: images, PDF, text, and Word documents') as unknown as null, false);
   }
 };
+
+export const getUploadDir = (): string => uploadDir;
 
 export const upload = multer({
   storage,
@@ -42,4 +62,36 @@ export const upload = multer({
   limits: { fileSize: env.MAX_FILE_SIZE },
 });
 
-export const uploadAttachments = upload.array('attachments', 5);
+export const uploadAttachments = upload.array('attachments', 8);
+
+const ASSISTANT_MIME_TYPES = [
+  ...ALLOWED_MIME_TYPES,
+  'text/plain',
+  'text/markdown',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+const assistantFileFilter = (
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+): void => {
+  if (ASSISTANT_MIME_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+    return;
+  }
+  cb(
+    new ApiError(
+      400,
+      'Invalid file type. Allowed: images, PDF, text, and Word documents'
+    ) as unknown as null,
+    false
+  );
+};
+
+export const uploadAssistantFiles = multer({
+  storage,
+  fileFilter: assistantFileFilter,
+  limits: { fileSize: env.MAX_FILE_SIZE },
+}).array('attachments', 5);

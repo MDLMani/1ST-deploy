@@ -19,3 +19,5 @@ export const authorize =
   };
 
 export const staffOnly = authorize(UserRole.ADMIN, UserRole.SUPPORT_AGENT);
+
+export const adminOnly = authorize(UserRole.ADMIN);

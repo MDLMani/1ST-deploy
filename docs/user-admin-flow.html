@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User & Admin App Flow — TVK</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    body{font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial;line-height:1.5;padding:24px}
+    h1{font-size:20px;margin-bottom:8px}
+    .container{display:flex;gap:24px}
+    .diagram{flex:1;min-width:480px}
+    .details{flex:1;max-width:680px}
+    .section{margin-bottom:18px}
+    .page{margin-bottom:8px}
+    .fields{margin-left:14px;color:#333}
+    code{background:#f3f3f3;padding:2px 6px;border-radius:4px}
+    .legend{font-size:13px;color:#555}
+  </style>
+</head>
+<body>
+  <h1>User & Admin App Flow — Combined</h1>
+  <p class="legend">This single-page HTML contains a Mermaid flowchart (left) and detailed pages/fields (right) for presentation or printing.</p>
+  <div class="container">
+    <div class="diagram">
+      <div class="mermaid">
+        %% Combined flowchart with two swimlanes: User App and Admin App
+        flowchart TB
+          subgraph User_App[User App]
+            U_Onboard([Onboarding\n(welcome, permissions)])
+            U_AuthLogin([Login\n(email, password)])
+            U_AuthSignup([Signup\n(name, email, password, phone)])
+            U_Home([Home / Feed])
+            U_Browse([Browse / Discover])
+            U_Item([Item Detail])
+            U_Cart([Cart])
+            U_Checkout([Checkout\n(address, payment method)])
+            U_Payment([Payment Gateway])
+            U_Orders([Orders / Order Detail])
+            U_Profile([Profile])
+            U_Settings([Settings])
+            U_Support([Support / Contact])
+            U_Notifications([Notifications Center])
+          end
+
+          subgraph Admin_App[Admin App]
+            A_Auth([Admin Login\n(email, password, 2FA)])
+            A_Dashboard([Dashboard\n(KPIs, widgets)])
+            A_Users([Users Management])
+            A_Products([Products / Content Management])
+            A_Orders([Orders Management])
+            A_Tickets([Support Tickets])
+            A_Reports([Reports & Analytics])
+            A_Settings([Admin Settings\n(Roles, Permissions)])
+            A_Notifications([System Notifications])
+          end
+
+          %% User flow
+          U_Onboard --> U_AuthSignup --> U_AuthLogin --> U_Home
+          U_Home --> U_Browse --> U_Item --> U_Cart --> U_Checkout --> U_Payment --> U_Orders
+          U_Home --> U_Orders
+          U_Home --> U_Profile --> U_Settings
+          U_Home --> U_Support
+          U_Home --> U_Notifications
+
+          %% Admin flow
+          A_Auth --> A_Dashboard
+          A_Dashboard --> A_Users
+          A_Dashboard --> A_Products
+          A_Dashboard --> A_Orders
+          A_Dashboard --> A_Tickets
+          A_Dashboard --> A_Reports
+          A_Dashboard --> A_Settings
+          A_Dashboard --> A_Notifications
+
+          %% Cross-references / integrations
+          U_Orders --> A_Orders
+          U_Support --> A_Tickets
+          U_Notifications --> A_Notifications
+          U_Profile --> A_Users
+      </div>
+    </div>
+
+    <div class="details">
+      <div class="section">
+        <h2>How to use</h2>
+        <p>Open this file in a browser. Mermaid renders the diagram automatically. Use browser print or screenshot for presentation slides.</p>
+      </div>
+
+      <div class="section">
+        <h2>Detailed Pages & Fields — User App</h2>
+        <div class="page">
+          <strong>Onboarding</strong>
+          <div class="fields">Purpose: First-time intro, permissions request.
+            <ul>
+              <li>Pages: Welcome, Feature tour</li>
+              <li>Fields: none (informational)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Auth — Login / Signup</strong>
+          <div class="fields">
+            <ul>
+              <li>Login: <code>email</code>, <code>password</code>, optional <code>remember me</code></li>
+              <li>Signup: <code>name</code>, <code>email</code>, <code>password</code>, <code>phone</code>, <code>terms</code> checkbox</li>
+              <li>Format: email validated, password min length 8, phone E.164 optional</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Home / Feed</strong>
+          <div class="fields">
+            <ul>
+              <li>Contains: personalized cards, quick actions, promo banners</li>
+              <li>Data format: list of cards with <code>id</code>, <code>title</code>, <code>summary</code>, <code>imageUrl</code>, <code>action</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Browse / Discover</strong>
+          <div class="fields">
+            <ul>
+              <li>Filters: categories, sort, price/date</li>
+              <li>Format: paginated results; items include <code>id,title,thumbnail,shortDesc,meta</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Item Detail</strong>
+          <div class="fields">
+            <ul>
+              <li>Sections: images carousel, full description, specs, reviews</li>
+              <li>Actions: add to cart, favorite, share</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Cart</strong>
+          <div class="fields">
+            <ul>
+              <li>Fields: list of items (<code>id,qty,price,options</code>), subtotal, discounts, shipping estimate</li>
+              <li>Format: editable quantities, persist in local storage/session server</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Checkout</strong>
+          <div class="fields">
+            <ul>
+              <li>Fields: shipping address (<code>name,addressLine1,addressLine2,city,state,zip,country,phone</code>)</li>
+              <li>Payment method selection: saved card, new card, external wallets</li>
+              <li>Order summary and confirm button</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Payment</strong>
+          <div class="fields">
+            <ul>
+              <li>Integration: third-party gateway (redirect or tokenized)</li>
+              <li>Fields (if card inline): <code>cardNumber,expiry,cvc,cardholderName</code> (PCI rules apply)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Orders</strong>
+          <div class="fields">
+            <ul>
+              <li>List view: <code>orderId,date,status,total</code></li>
+              <li>Detail: items, tracking, invoices, cancellations</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Profile & Settings</strong>
+          <div class="fields">
+            <ul>
+              <li>Profile: <code>name,email,phone,avatar</code></li>
+              <li>Settings: notifications toggles, privacy options, language</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Support / Contact</strong>
+          <div class="fields">
+            <ul>
+              <li>Ticket form: <code>subject,category,message,attachments</code></li>
+              <li>Format: attachments accepted as file upload; follow-up messages thread</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Notifications Center</strong>
+          <div class="fields">
+            <ul>
+              <li>Types: transactional, promo, system</li>
+              <li>Format: list with <code>id,type,title,body,date,read</code></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Detailed Pages & Fields — Admin App</h2>
+
+        <div class="page">
+          <strong>Admin Login</strong>
+          <div class="fields">
+            <ul>
+              <li>Fields: <code>email,password</code>, 2FA code optional</li>
+              <li>Security: IP/role based restrictions, session timeout settings</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Dashboard</strong>
+          <div class="fields">
+            <ul>
+              <li>Widgets: daily revenue, active users, pending orders, open tickets</li>
+              <li>Format: metric tiles, recent activity feed, charts</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Users Management</strong>
+          <div class="fields">
+            <ul>
+              <li>List: <code>userId,name,email,status,joinedDate,role</code></li>
+              <li>Detail: ability to edit profile, roles, impersonate, deactivate</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Products / Content Management</strong>
+          <div class="fields">
+            <ul>
+              <li>Fields per product: <code>id,title,description,price,images,inventory,category,attributes</code></li>
+              <li>Bulk import/export, versioning, publish/unpublish</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Orders Management</strong>
+          <div class="fields">
+            <ul>
+              <li>Search & filters: by date, status, user, orderId</li>
+              <li>Actions: update status, refund, resend invoice, contact user</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Support Tickets</strong>
+          <div class="fields">
+            <ul>
+              <li>Ticket fields: <code>ticketId,userId,subject,category,status,assignedTo,messages</code></li>
+              <li>Workflow: triage → assign → respond → resolve</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Reports & Analytics</strong>
+          <div class="fields">
+            <ul>
+              <li>Pre-built reports: sales, user growth, retention, support metrics</li>
+              <li>Export: CSV, XLSX; date-range chooser, chart types</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>Admin Settings & Roles</strong>
+          <div class="fields">
+            <ul>
+              <li>Role model: admin roles, permissions matrix</li>
+              <li>System settings: feature flags, integrations, webhooks</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="page">
+          <strong>System Notifications</strong>
+          <div class="fields">
+            <ul>
+              <li>Manage templates, channels (email, push), schedules</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Integration Points</h2>
+        <ul>
+          <li><strong>Auth:</strong> central auth service used by both apps.</li>
+          <li><strong>Orders:</strong> User orders appear in Admin Orders for fulfillment.</li>
+          <li><strong>Support:</strong> User tickets map to Admin tickets for agents.</li>
+          <li><strong>Notifications:</strong> Shared notification center and templates.</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <script>mermaid.initialize({startOnLoad:true,theme:"default"});</script>
+</body>
+</html>

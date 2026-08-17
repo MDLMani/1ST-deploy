@@ -1,7 +1,7 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { verifyAccessToken } from '../utils/jwt';
-import { corsOrigins } from '../config/env';
+import { corsOriginDelegate } from '../config/env';
 import { logger } from '../utils/logger';
 
 let io: Server | null = null;
@@ -9,7 +9,7 @@ let io: Server | null = null;
 export const initSocketIO = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
-      origin: corsOrigins,
+      origin: corsOriginDelegate,
       methods: ['GET', 'POST'],
       credentials: true,
     },

@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { ticketService } from '../services/ticket.service';
-import { TICKET_CATEGORIES } from '../constants';
+import { slaService } from '../services/sla.service';
 import { asyncHandler, getRouteParam } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
 import {
@@ -10,8 +10,7 @@ import {
   PaginationInput,
 } from '../validators';
 import { IAttachment } from '../interfaces';
-import path from 'path';
-import { env } from '../config/env';
+import { getUploadDir } from '../middleware/upload.middleware';
 
 const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
   return files.map((file) => ({
@@ -19,7 +18,7 @@ const buildAttachments = (files: Express.Multer.File[]): IAttachment[] => {
     originalName: file.originalname,
     mimeType: file.mimetype,
     size: file.size,
-    path: path.join(env.UPLOAD_DIR, file.filename),
+    path: `${getUploadDir()}/${file.filename}`,
   }));
 };
 
@@ -81,6 +80,14 @@ export const getTicketStats = asyncHandler(async (_req, res: Response) => {
   sendSuccess(res, 'Dashboard stats retrieved', stats);
 });
 
+export const getTicketTrends = asyncHandler(async (req, res: Response) => {
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  const granularity = req.query.granularity === 'day' ? 'day' : 'month';
+  const data = await ticketService.getTrends(from, to, granularity);
+  sendSuccess(res, 'Ticket trends retrieved', data);
+});
+
 export const getTicketById = asyncHandler(async (req, res: Response) => {
   const ticket = await ticketService.getTicketById(
     getRouteParam(req.params.id),
@@ -108,4 +115,9 @@ export const assignTicket = asyncHandler(async (req, res: Response) => {
     req.user!.role
   );
   sendSuccess(res, 'Ticket assigned successfully', ticket);
+});
+
+export const getTicketSLAStatus = asyncHandler(async (req, res: Response) => {
+  const status = await slaService.getTicketSLAStatus(getRouteParam(req.params.id));
+  sendSuccess(res, 'SLA status retrieved', status);
 });

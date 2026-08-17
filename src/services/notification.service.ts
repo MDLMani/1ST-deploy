@@ -2,6 +2,7 @@ import { notificationRepository } from '../repositories/notification.repository'
 import { ApiError } from '../utils/ApiError';
 import { Types } from 'mongoose';
 import { sendPushToUser } from './push.service';
+import { sendFcmToUser } from './fcm.service';
 import type { PushTemplateId, PushTemplateVars } from '../templates/push.templates';
 import { renderPushTemplate } from '../templates/push.templates';
 
@@ -52,6 +53,20 @@ export class NotificationService {
     });
 
     await sendPushToUser(userId, templateId, vars, ticketId);
+    // Also send native mobile push (FCM) when available
+    try {
+      await sendFcmToUser(
+        userId,
+        { title: rendered.title, body: rendered.body },
+        {
+          template: templateId,
+          ticketId: ticketId ?? '',
+          url: rendered.url,
+        }
+      );
+    } catch (err) {
+      // best-effort: don't fail the main flow if FCM send errors
+    }
   }
 }
 

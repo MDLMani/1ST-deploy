@@ -3,7 +3,13 @@ dist/
 uploads/
 logs/
 .env
+.env.local
+.env.*.local
 *.log
 .DS_Store
 coverage/
+
+# Local deploy secrets
+env.deploy.*
 .vercel
+!.env.example
